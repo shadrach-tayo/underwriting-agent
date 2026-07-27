@@ -1,67 +1,67 @@
-"""LangGraph orchestration: intake → retrieval → decision (+ HITL escalation)."""
+"""LangGraph agent runtime — see docs/underwriting_agent_system_design.png."""
 
-from typing import Any, TypedDict
+from underwriting_agent.graph.nodes import (
+    apply_risk_ceiling,
+    approve_decline_node,
+    audit_log_node,
+    decision_node,
+    financial_analysis_node,
+    hitl_escalation_node,
+    human_capture_node,
+    policy_compliance_node,
+    route_after_critic,
+    route_after_decision,
+    self_critic_node,
+    underwriter_node,
+)
+from underwriting_agent.graph.state import GraphState, SubagentState
 
-from underwriting_agent.models import Applicant, DecisionOutcome, DecisionResult
-from underwriting_agent.config import get_settings
-
-
-class GraphState(TypedDict, total=False):
-    applicant: Applicant
-    financials: dict[str, Any]
-    policy_matches: list[dict[str, Any]]
-    decision: DecisionResult
-
-
-def intake_node(state: GraphState) -> GraphState:
-    """Validate / normalize applicant intake. Placeholder for Week 2 Day 1."""
-    return state
-
-
-def retrieval_node(state: GraphState) -> GraphState:
-    """Policy retrieval placeholder — replaced by pgvector agentic RAG in Week 3."""
-    return {**state, "policy_matches": []}
-
-
-def apply_risk_ceiling(risk_score: float, proposed: DecisionOutcome) -> tuple[DecisionOutcome, bool]:
-    """Hard-coded risk ceiling: never bypassable via prompt. Enforced in code."""
-    ceiling = get_settings().risk_ceiling
-    if risk_score >= ceiling and proposed == DecisionOutcome.APPROVE:
-        return DecisionOutcome.ESCALATE, True
-    if risk_score >= ceiling:
-        return DecisionOutcome.ESCALATE, True
-    return proposed, False
-
-
-def decision_node(state: GraphState) -> GraphState:
-    """Decision placeholder with risk-ceiling gate."""
-    risk_score = float((state.get("financials") or {}).get("risk_score", 0.0))
-    proposed = DecisionOutcome.ESCALATE
-    outcome, ceiling_triggered = apply_risk_ceiling(risk_score, proposed)
-    decision = DecisionResult(
-        outcome=outcome,
-        confidence=0.0,
-        risk_score=risk_score,
-        reasoning_trace=["Placeholder decision node — Week 2 Day 1 skeleton"],
-        citations=[],
-        ceiling_triggered=ceiling_triggered,
-    )
-    return {**state, "decision": decision}
+__all__ = [
+    "GraphState",
+    "SubagentState",
+    "apply_risk_ceiling",
+    "build_graph",
+    "graph",
+]
 
 
 def build_graph():
-    """Build the 3-node LangGraph skeleton (Week 2 Day 1).
+    """Underwriter → parallel subagents → critic (Send) → decision → audit → END."""
+    from langgraph.graph import END, START, StateGraph
 
-    Wiring supervisor, subagents, and HITL interrupt_before comes in later Week 2 days.
-    """
-    from langgraph.graph import END, StateGraph
+    builder = StateGraph(GraphState)
 
-    graph = StateGraph(GraphState)
-    graph.add_node("intake", intake_node)
-    graph.add_node("retrieval", retrieval_node)
-    graph.add_node("decision", decision_node)
-    graph.set_entry_point("intake")
-    graph.add_edge("intake", "retrieval")
-    graph.add_edge("retrieval", "decision")
-    graph.add_edge("decision", END)
-    return graph.compile()
+    builder.add_node("underwriter", underwriter_node)
+    builder.add_node("financial_analysis", financial_analysis_node)
+    builder.add_node("policy_compliance", policy_compliance_node)
+    builder.add_node("self_critic", self_critic_node, defer=True)
+    builder.add_node("decision", decision_node)
+    builder.add_node("approve_decline", approve_decline_node)
+    builder.add_node("hitl_escalation", hitl_escalation_node)
+    builder.add_node("human_capture", human_capture_node)
+    builder.add_node("audit_log", audit_log_node)
+
+    builder.add_edge(START, "underwriter")
+    builder.add_edge("underwriter", "financial_analysis")
+    builder.add_edge("underwriter", "policy_compliance")
+    builder.add_edge("financial_analysis", "self_critic")
+    builder.add_edge("policy_compliance", "self_critic")
+    builder.add_conditional_edges(
+        "self_critic",
+        route_after_critic,
+        ["financial_analysis", "policy_compliance", "decision"],
+    )
+    builder.add_conditional_edges(
+        "decision",
+        route_after_decision,
+        {"approve_decline": "approve_decline", "hitl_escalation": "hitl_escalation"},
+    )
+    builder.add_edge("approve_decline", "audit_log")
+    builder.add_edge("hitl_escalation", "human_capture")
+    builder.add_edge("human_capture", "audit_log")
+    builder.add_edge("audit_log", END)
+
+    return builder.compile()
+
+
+graph = build_graph()

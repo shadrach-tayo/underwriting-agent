@@ -1,48 +1,75 @@
 # System Design
 
-> Week 1 Day 2 deliverable. Expand using Guide 2 in `underwriting-agent-roadmap.html`.
+Canonical diagram: [`underwriting_agent_system_design.png`](./underwriting_agent_system_design.png).
 
 ## 1. Requirements
 
 ### Functional
 
-- Accept structured SME applicant intake
-- Retrieve relevant underwriting / fair-lending policy clauses
-- Produce approve / deny / escalate with reasoning trace and citations
-- Escalate via HITL when confidence is low or risk is high
-- Enforce hard-coded risk ceiling in code
+- Process inbound applications; auto-approve / deny within a confidence + risk envelope
+- Human underwriters take over when auto-decision criteria are not met (HITL)
+- Hard-reject bankruptcies and severe fraud alerts
+- Escalate non-standard / conditional cases with a full reasoning trace
+- Interpret policy clauses; produce compliance reports with citations
+- Compute standard underwriting ratios; suggest term modifications when useful
+- Log every retry cycle, report, and citation immutably (hash-chained audit trail)
+- ECOA/Reg B adverse-action reasons on every denial
 
-### Non-functional (initial targets)
+### Non-functional
 
-- Latency p95 < 5s
-- False-approve rate 0% on gold set
-- LangSmith-traced runs for every decision path
+| Metric | Target |
+|--------|--------|
+| Latency (clean path) | < 5s |
+| Latency (retry chain) | < 15s |
+| Escalation rate | < 25% |
+| False-approve rate | 0% (hard gate) |
+| Availability | 99.99% |
+| Scale | ~1000 applications / day |
 
 ## 2. High-level architecture
 
-See Architecture tab in the roadmap HTML (Supervisor → Financial Analysis + Policy Compliance → Agentic RAG → Decision → Auto-decision | HITL).
+```text
+API Gateway (Backend API | MCP | Serverless)
+        ↓
+ Agent Runtime (LangGraph)
+   Underwriter Agent
+        ↓ fan-out
+   Financial Analysis ║ Policy Compliance   (SubagentState each)
+        ↓ fan-in (defer)
+   Self Critic / Adversarial  ⟲ Send(rerun_targets)
+        ↓
+   Decision Node (CompositeScore + hard-coded risk ceiling)
+        ↓                    ↓
+   Approve/Decline      HITL → Human Capture → Human Review UI
+        ↓                    ↓
+           Immutable Audit Trail → END
+```
 
-## 3. Data model (sketch)
+## 3. Data model
 
-- **Applicant** — structured financial profile (no real PII)
-- **Policy chunk** — source, citation, embedding, text
-- **Audit log** — immutable record of inputs, retrieval, decision, ceiling trigger
+| Entity | Role |
+|--------|------|
+| `Applicant` | Typed structured intake (+ bankruptcy / fraud flags) |
+| `SubagentOutput` | Uniform financial/policy result (`FinancialMetrics`, citations, conflicts) |
+| `CritiqueReport` | `PASS` / `RETRY` / `ESCALATE` + `rerun_targets` |
+| `Decision` | Outcome, origin, `CompositeScore`, ceiling flag, adverse-action reasons |
+| `EscalationPackage` / `HumanReviewRecord` | Review queue + maker-checker override |
+| `AuditEntry` | Hash-chained append-only events |
+| `GraphState` / `SubagentState` | LangGraph channels vs isolated subagent working set |
 
-## 4. Scaling
-
-- Stateless API workers (ECS Fargate) + shared Postgres/pgvector
-- Checkpoint store for LangGraph HITL resume
-
-## 5. Failure modes
+## 4. Failure modes
 
 | Failure | Mitigation |
 |---------|------------|
-| LLM outage | Fail closed to escalate; optional thin OpenAI fallback later |
-| Empty retrieval | Escalate; never auto-approve without citations |
-| Conflicting policy clauses | Surface conflict in reasoning trace; prefer escalate |
+| Missed edge cases | Critic retry loop (`Send`) + HITL |
+| Hallucination | Citation grounding fields + RAG (Week 3) |
+| API / LLM outage | Fail closed to escalate; backoff |
+| Over-conservative declines | Calibrate composite score + term-mod suggestions |
+| Ceiling override abuse | Maker-checker (`override_confirmed_by`) |
 
-## 6. Tradeoffs
+## 5. Tradeoffs
 
-- LangGraph for orchestration + Claude Agent SDK for policy subagent (comparison story)
-- pgvector over a hosted vector DB (reuse Postgres operational knowledge)
-- Risk ceiling in code, not prompt (non-negotiable safety property)
+- Uniform `SubagentOutput` so critique/decision treat agents identically
+- Hard-coded risk ceiling in code (`RiskTier.PROHIBITED`), not prompts
+- Selective `Send` retries with merge-by-key `subagent_outputs`
+- Policy subagent later compared as LangGraph-native vs Claude Agent SDK

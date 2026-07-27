@@ -1,0 +1,8 @@
+{
+  "python_version": "3.12",
+  "dependencies": ["."],
+  "graphs": {
+    "underwriting": "./src/underwriting_agent/graph/__init__.py:graph"
+  },
+  "env": ".env"
+}

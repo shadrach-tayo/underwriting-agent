@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     langsmith_api_key: str | None = None
+    langsmith_tracing: bool = False
+    langsmith_project: str = "underwriting-agent"
+    # Legacy LangChain aliases (still read from env for older tooling)
     langchain_tracing_v2: bool = False
     langchain_project: str = "underwriting-agent"
     database_url: str = "postgresql://postgres:postgres@localhost:5432/underwriting"

@@ -22,17 +22,17 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 
 ```text
 src/underwriting_agent/
-  graph/          # LangGraph skeleton (intake → retrieval → decision)
-  agents/         # Financial Analysis + Policy Compliance subagents
+  graph/          # GraphState/SubagentState, nodes, hash-chained audit
+  agents/         # Financial, Policy, Critic (SubagentOutput / CritiqueReport)
   mcp_server/     # FastMCP tools
   api/            # FastAPI health/ready shell (Week 4 expands)
   evals/          # Eval suite (Week 4)
-  models.py       # Applicant / decision schemas
+  models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
 data/
   policy_sources/ # Public policy docs (Week 1)
   gold_set/       # Labeled synthetic applicants (Week 1)
-docs/             # System design
+docs/             # System design (+ underwriting_agent_system_design.png)
 terraform/        # AWS ECS + RDS (Week 5)
 tests/
 ```
@@ -45,13 +45,31 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
 # Install deps into project .venv (created automatically)
 uv sync
 
-# Copy env template and fill keys
+# Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 cp .env.example .env
 
 # Smoke-check
 uv run underwriting-agent
 uv run pytest
 ```
+
+### Local LangGraph + LangSmith
+
+From the repo root (uses [`langgraph.json`](./langgraph.json)):
+
+```bash
+# Requires LANGSMITH_API_KEY in .env for Studio/tracing
+uv run langgraph dev
+```
+
+This starts the LangGraph API server with hot reload (default `http://127.0.0.1:2024`) and opens LangGraph Studio. Traces land in the LangSmith project named by `LANGSMITH_PROJECT` (default `underwriting-agent`).
+
+```bash
+uv run langgraph validate   # check langgraph.json
+uv run langgraph dev --no-browser
+```
+
+Graph ID: `underwriting` → `src/underwriting_agent/graph/__init__.py:graph`
 
 `langchain-community` is pinned to `0.3.29` so `ragas` can import (newer community builds dropped `chat_models.vertexai`). Revisit when upgrading evals in Week 4.
 
