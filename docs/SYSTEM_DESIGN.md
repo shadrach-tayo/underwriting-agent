@@ -10,7 +10,8 @@ Canonical diagram: [`underwriting_agent_system_design.png`](./underwriting_agent
 - Human underwriters take over when auto-decision criteria are not met (HITL)
 - Hard-reject bankruptcies and severe fraud alerts
 - Escalate non-standard / conditional cases with a full reasoning trace
-- Interpret policy clauses; produce compliance reports with citations
+- Interpret **layered** policy (compliance floor → eligibility gate → program track); cite clauses with `program` tags
+- Route applicants across two products (SBA 7(a) vs CDFI direct) rather than merging policies
 - Compute standard underwriting ratios; suggest term modifications when useful
 - Log every retry cycle, report, and citation immutably (hash-chained audit trail)
 - ECOA/Reg B adverse-action reasons on every denial
@@ -49,10 +50,12 @@ API Gateway (Backend API | MCP | Serverless)
 
 | Entity | Role |
 |--------|------|
-| `Applicant` | Typed structured intake (+ bankruptcy / fraud flags) |
+| `Applicant` | Typed structured intake (+ optional `requested_program`, SBSS proxy) |
+| `PolicyLayer` / `LoanProgram` | Layer tags (`compliance_floor`…`cdfi_direct`) vs originate-able products |
+| `ProgramRouting` | Eligible / recommended program track(s) on `Decision` |
 | `SubagentOutput` | Uniform financial/policy result (`FinancialMetrics`, citations, conflicts) |
 | `CritiqueReport` | `PASS` / `RETRY` / `ESCALATE` + `rerun_targets` |
-| `Decision` | Outcome, origin, `CompositeScore`, ceiling flag, adverse-action reasons |
+| `Decision` | Outcome, origin, `CompositeScore`, ceiling flag, program routing, adverse-action |
 | `EscalationPackage` / `HumanReviewRecord` | Review queue + maker-checker override |
 | `AuditEntry` | Hash-chained append-only events |
 | `GraphState` / `SubagentState` | LangGraph channels vs isolated subagent working set |
@@ -72,4 +75,5 @@ API Gateway (Backend API | MCP | Serverless)
 - Uniform `SubagentOutput` so critique/decision treat agents identically
 - Hard-coded risk ceiling in code (`RiskTier.PROHIBITED`), not prompts
 - Selective `Send` retries with merge-by-key `subagent_outputs`
+- Policy as **layers** (compliance / eligibility / program), not a flat merge — dual products
 - Policy subagent later compared as LangGraph-native vs Claude Agent SDK

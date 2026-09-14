@@ -48,9 +48,15 @@ uv sync
 # Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 cp .env.example .env
 
+# Postgres + pgvector for RAG (policy ingest / retrieve)
+docker compose up -d postgres
+
 # Smoke-check
 uv run underwriting-agent
 uv run pytest
+
+# After VOYAGE_API_KEY is set and Postgres is healthy:
+# uv run underwriting-rag-ingest
 ```
 
 ### Local LangGraph + LangSmith

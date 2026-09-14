@@ -29,6 +29,7 @@ Operational failure mode for this agent (third decision path):
 |--------|--------|
 | False-approve rate | **0%** on labeled gold set (hard gate / build-blocking) |
 | Decision accuracy | **90%+** vs ground truth on clear-cut cases |
+| Program-routing accuracy | **90%+** vs gold expected program track(s) |
 | Escalation rate | **15–25%** |
 | Escalation precision | **80%+** |
 | Citation accuracy | **95%+** |
@@ -43,4 +44,7 @@ Operational failure mode for this agent (third decision path):
 
 ## Notes
 
-Calibrate synthetic applicants against public Fed Small Business Credit Survey distributions; ground-truth labels from public SBA / lender eligibility rules (see Week 1 Days 3–4).
+Dual-program fictional CDFI lender (SBA 7(a) + Accion-style direct), with ECOA/Reg B
+as a compliance floor and SBA core eligibility as a shared categorical gate — not one
+merged rulebook. Calibrate synthetic applicants against Fed Small Business Credit Survey
+distributions; gold labels include outcome **and** expected program route (see `EVALS.md`).

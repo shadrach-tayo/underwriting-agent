@@ -8,19 +8,21 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "agent",
     "claude-agent-sdk>=0.2.124",
     "deepeval>=4.1.2",
     "fastapi>=0.139.2",
     "fastmcp>=3.4.4",
     "httpx>=0.28.1",
     "langchain-anthropic>=1.5.0",
-    "langchain-community==0.3.29",
+    "langchain-community>=0.4.2",
     "langgraph>=1.2.9",
     "langsmith>=0.10.9",
-    "pgvector>=0.5.0",
+    "pgvector>=0.2.5,<0.4",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
+    "python-docx>=1.2.0",
     "python-dotenv>=1.2.2",
     "ragas>=0.4.3",
     "sqlalchemy>=2.0.51",
@@ -29,6 +31,7 @@ dependencies = [
 
 [project.scripts]
 underwriting-agent = "underwriting_agent:main"
+underwriting-rag-ingest = "underwriting_agent.rag.ingest:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]
@@ -64,3 +67,6 @@ venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
 extraPaths = ["src"]
+
+[tool.uv.sources]
+agent = { git = "ssh://git@github.com/shadrach-tayo/ai-engineering-boilerplate.git", rev = "eval" }

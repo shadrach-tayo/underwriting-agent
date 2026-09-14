@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from underwriting_agent.models import (
     Applicant,
     Citation,
+    PolicyLayer,
     PolicySource,
     SubagentName,
     SubagentOutput,
@@ -19,6 +20,7 @@ _STUB_SOURCE = PolicySource(
     authority="lender",
     version="0.1.0",
     effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+    program=PolicyLayer.CDFI_DIRECT,
 )
 
 
@@ -34,6 +36,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
             source=_STUB_SOURCE,
             retrieved_text="Policy retrieval not yet implemented.",
             similarity_score=0.5,
+            program=PolicyLayer.CDFI_DIRECT,
             grounding_score=None,
             grounded=None,
         )

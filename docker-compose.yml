@@ -1,0 +1,29 @@
+# Local Postgres + pgvector for underwriting RAG (policy corpus).
+# Multi-tenant lender DBs will layer on later (schemas / DATABASE_URL per tenant).
+#
+#   docker compose up -d postgres
+#   # wait until healthy, then:
+#   uv run underwriting-rag-ingest
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: underwriting-postgres
+    environment:
+      POSTGRES_USER: underwriting
+      POSTGRES_PASSWORD: underwriting
+      POSTGRES_DB: underwriting_db
+    ports:
+      # Host 54326 avoids clashing with a local Postgres or the boilerplate RAG stack (54325).
+      - "54326:5432"
+    volumes:
+      - underwriting_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U underwriting -d underwriting_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  underwriting_pgdata:

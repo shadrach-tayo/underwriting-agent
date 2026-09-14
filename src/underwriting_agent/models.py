@@ -52,6 +52,25 @@ class RiskTier(StrEnum):
     PROHIBITED = "prohibited"
 
 
+class PolicyLayer(StrEnum):
+    """Three policy layers — never flatten into one scored rule set.
+
+    Chunk metadata uses the same string values under the ``program`` key.
+    """
+
+    COMPLIANCE_FLOOR = "compliance_floor"  # ECOA/Reg B — boolean gate every decision
+    ELIGIBILITY_GATE = "eligibility_gate"  # SBA core eligibility as universal min bar
+    SBA_7A = "sba_7a"  # SBA 7(a) program underwriting
+    CDFI_DIRECT = "cdfi_direct"  # Accion-style direct CDFI product
+
+
+class LoanProgram(StrEnum):
+    """Originate-able products at the fictional dual-program CDFI lender."""
+
+    SBA_7A = "sba_7a"
+    CDFI_DIRECT = "cdfi_direct"
+
+
 # ---------------------------------------------------------------------------
 # Leaf value objects
 # ---------------------------------------------------------------------------
@@ -68,8 +87,12 @@ class Applicant(BaseModel):
     years_in_business: float = Field(ge=0)
     debt_service_coverage_ratio: float | None = None
     credit_score_proxy: int | None = Field(default=None, ge=300, le=850)
+    # Soft FICO SBSS proxy for SBA track (gold-set label / routing); optional.
+    sbss_proxy: int | None = Field(default=None, ge=0, le=300)
     has_bankruptcy: bool = False
     has_severe_fraud_alert: bool = False
+    # Preferred product if stated; agent may still recommend the other track.
+    requested_program: LoanProgram | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -81,6 +104,8 @@ class PolicySource(BaseModel):
     authority: Literal["regulatory", "sba", "lender"]
     version: str
     effective_date: datetime
+    # Layer tag mirrored from chunk metadata ``program``.
+    program: PolicyLayer = PolicyLayer.COMPLIANCE_FLOOR
 
 
 class Citation(BaseModel):
@@ -90,6 +115,7 @@ class Citation(BaseModel):
     source: PolicySource
     retrieved_text: str
     similarity_score: float = Field(ge=0, le=1)
+    program: PolicyLayer = PolicyLayer.COMPLIANCE_FLOOR
     grounding_score: Optional[float] = Field(default=None, ge=0, le=1)
     grounded: Optional[bool] = None
 
@@ -178,6 +204,16 @@ class AdverseActionReason(BaseModel):
     supporting_citations: list[str] = Field(default_factory=list)
 
 
+class ProgramRouting(BaseModel):
+    """Which product track(s) the applicant fits — independent of approve/deny."""
+
+    compliance_floor_pass: bool = True
+    eligibility_gate_pass: bool = True
+    eligible_programs: list[LoanProgram] = Field(default_factory=list)
+    recommended_program: LoanProgram | None = None
+    ineligible_reasons: dict[str, str] = Field(default_factory=dict)
+
+
 class Decision(BaseModel):
     outcome: DecisionOutcome
     origin: DecisionOrigin
@@ -185,6 +221,7 @@ class Decision(BaseModel):
     ceiling_triggered: bool
     composite_score: Optional[CompositeScore] = None
     rationale: str
+    program_routing: Optional[ProgramRouting] = None
     adverse_action_reasons: list[AdverseActionReason] = Field(default_factory=list)
     term_modifications: list[str] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)

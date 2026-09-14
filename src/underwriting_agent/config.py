@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     # Legacy LangChain aliases (still read from env for older tooling)
     langchain_tracing_v2: bool = False
     langchain_project: str = "underwriting-agent"
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/underwriting"
+    database_url: str = (
+        "postgresql+psycopg://underwriting:underwriting@localhost:54326/underwriting_db"
+    )
 
     # Hard-coded risk ceiling: cases at/above this score must escalate.
     risk_ceiling: float = Field(default=0.75, ge=0.0, le=1.0)
