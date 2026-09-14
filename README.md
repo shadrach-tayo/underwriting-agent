@@ -17,6 +17,7 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 | Evals | DeepEval + RAGAS + custom LLM-as-judge |
 | Observability | LangSmith |
 | Package / env | **uv** (`.venv`) |
+| Web UI | Next.js + shadcn (`web/`) |
 
 ## Layout
 
@@ -25,10 +26,11 @@ src/underwriting_agent/
   graph/          # GraphState/SubagentState, nodes, hash-chained audit
   agents/         # Financial, Policy, Critic (SubagentOutput / CritiqueReport)
   mcp_server/     # FastMCP tools
-  api/            # FastAPI health/ready shell (Week 4 expands)
+  api/            # FastAPI health/ready + admin RAG ingest
   evals/          # Eval suite (Week 4)
   models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
+web/              # Next.js console — Admin (RAG) + Playground (agents)
 data/
   policy_sources/ # Public policy docs (Week 1)
   gold_set/       # Labeled synthetic applicants (Week 1)
@@ -57,6 +59,13 @@ uv run pytest
 
 # After VOYAGE_API_KEY is set and Postgres is healthy:
 # uv run underwriting-rag-ingest
+# or via admin API (defaults to pgvector / targets=vector):
+# uv run underwriting-api
+# curl -X POST http://127.0.0.1:8080/admin/rag/ingest -H 'Content-Type: application/json' -d '{}'
+# curl http://127.0.0.1:8080/admin/rag/status
+
+# Web console (Admin + Playground)
+cd web && pnpm install && pnpm dev
 ```
 
 ### Local LangGraph + LangSmith

@@ -13,17 +13,30 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from langchain_core.documents import Document
 
+from underwriting_agent.config import IngestTarget, get_settings
 from underwriting_agent.models import PolicyLayer
-from underwriting_agent.rag import POLICY_INDEX, get_policy_pipeline, policy_sources_dir
+from underwriting_agent.rag import get_policy_pipeline, policy_sources_dir
 from underwriting_agent.rag.tags import resolve_program
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class IngestResult:
+    """Outcome of a policy corpus rebuild."""
+
+    index_name: str
+    targets: tuple[str, ...]
+    source_units: int
+    by_program: dict[str, int] = field(default_factory=dict)
+    source_files: list[str] = field(default_factory=list)
 
 
 def _base_metadata(path: Path, *, page: int, program: PolicyLayer) -> dict[str, Any]:
@@ -112,6 +125,22 @@ def _load_markdown(path: Path) -> list[Document]:
     return docs
 
 
+def list_policy_source_files(data_dir: Path | None = None) -> list[str]:
+    """Return ingestible filenames under the policy sources directory."""
+    root = data_dir or policy_sources_dir()
+    if not root.is_dir():
+        return []
+    names: list[str] = []
+    for path in sorted(root.iterdir()):
+        if path.name.startswith(".") or path.name.upper().startswith("SOURCES"):
+            continue
+        if path.suffix.lower() in {".gitkeep"} or not path.is_file():
+            continue
+        if path.suffix.lower() in {".pdf", ".docx", ".doc", ".md"}:
+            names.append(path.name)
+    return names
+
+
 def load_policy_documents(data_dir: Path | None = None) -> list[Document]:
     """Load policy files from ``data/policy_sources`` (skips SOURCES.md / .gitkeep)."""
     root = data_dir or policy_sources_dir()
@@ -143,20 +172,46 @@ def load_policy_documents(data_dir: Path | None = None) -> list[Document]:
     return documents
 
 
-def ingest_policy_sources(*, targets: tuple[str, ...] = ("vector",)) -> int:
-    """Chunk + embed policy docs into the underwriting pgvector index."""
-    docs = load_policy_documents()
+def _program_counts(docs: list[Document]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for d in docs:
+        key = str(d.metadata.get("program", "unknown"))
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def ingest_policy_sources(
+    *,
+    targets: tuple[IngestTarget, ...] | None = None,
+    index_name: str | None = None,
+    data_dir: Path | None = None,
+) -> IngestResult:
+    """Chunk + embed policy docs into the configured index (default: pgvector only)."""
+    settings = get_settings()
+    resolved_targets = targets if targets is not None else settings.ingest_targets()
+    resolved_index = index_name or settings.rag_index_name
+    source_files = list_policy_source_files(data_dir)
+    docs = load_policy_documents(data_dir)
     if not docs:
-        raise FileNotFoundError(f"No policy documents found in {policy_sources_dir()}")
-    pipeline = get_policy_pipeline(index_name=POLICY_INDEX)
-    pipeline.ingest(docs, index_name=POLICY_INDEX, targets=targets)
-    return len(docs)
+        raise FileNotFoundError(f"No policy documents found in {data_dir or policy_sources_dir()}")
+    pipeline = get_policy_pipeline(index_name=resolved_index)
+    pipeline.ingest(docs, index_name=resolved_index, targets=resolved_targets)
+    return IngestResult(
+        index_name=resolved_index,
+        targets=tuple(resolved_targets),
+        source_units=len(docs),
+        by_program=_program_counts(docs),
+        source_files=source_files,
+    )
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    n = ingest_policy_sources()
-    print(f"Ingested {n} source units into index {POLICY_INDEX!r}")
+    result = ingest_policy_sources()
+    print(
+        f"Ingested {result.source_units} source units into index "
+        f"{result.index_name!r} targets={list(result.targets)}"
+    )
 
 
 if __name__ == "__main__":

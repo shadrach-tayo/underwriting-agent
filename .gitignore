@@ -27,3 +27,10 @@ htmlcov/
 # Data artifacts (keep source trees; ignore large generated blobs)
 data/gold_set/*.parquet
 data/embeddings/
+
+# Frontend (Next.js)
+web/node_modules/
+web/.next/
+web/out/
+web/.turbo/
+web/next-env.d.ts

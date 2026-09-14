@@ -8,6 +8,7 @@ from typing import Literal
 
 from rag.pipeline import RagConfig, RagPipeline, RetrievalResult
 
+from underwriting_agent.config import get_settings
 from underwriting_agent.models import Citation, PolicyLayer, PolicySource
 
 Authority = Literal["regulatory", "sba", "lender"]
@@ -22,6 +23,7 @@ __all__ = [
     "policy_sources_dir",
 ]
 
+# Kept for backward-compatible imports; prefer Settings.rag_index_name.
 POLICY_INDEX = "underwriting_policy_chunk_512"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_EFFECTIVE = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -46,20 +48,21 @@ def policy_sources_dir() -> Path:
 
 def get_policy_pipeline(
     *,
-    index_name: str = POLICY_INDEX,
-    strategy: str = "vector",
-    top_k: int = 5,
+    index_name: str | None = None,
+    strategy: str | None = None,
+    top_k: int | None = None,
 ) -> RagPipeline:
-    """Configured pipeline for underwriting policy retrieval."""
+    """Configured pipeline for underwriting policy retrieval (settings-backed)."""
+    settings = get_settings()
     return RagPipeline(
         RagConfig(
-            index_name=index_name,
-            chunk_size=512,
-            chunk_overlap=50,
-            embedding_dim=1024,
-            embedding_model="voyage-3.5",
-            strategy=strategy,  # type: ignore[arg-type]
-            top_k=top_k,
+            index_name=index_name or settings.rag_index_name,
+            chunk_size=settings.rag_chunk_size,
+            chunk_overlap=settings.rag_chunk_overlap,
+            embedding_dim=settings.rag_embedding_dim,
+            embedding_model=settings.rag_embedding_model,
+            strategy=(strategy or settings.rag_strategy),  # type: ignore[arg-type]
+            top_k=top_k if top_k is not None else settings.rag_top_k,
             rerank=False,
             system_prompt=_LAYER_SYSTEM_PROMPT,
         )
