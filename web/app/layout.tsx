@@ -2,8 +2,10 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono, Nunito_Sans } from "next/font/google"
 
 import { SiteHeader } from "@/components/site-header"
+import { QueryProvider } from "@/components/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DirectionProvider } from "@/components/ui/direction"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
@@ -42,10 +44,14 @@ export default function RootLayout({
       <body className="min-h-svh bg-background text-foreground">
         <DirectionProvider direction="ltr">
           <ThemeProvider>
-            <div className="flex min-h-svh flex-col">
-              <SiteHeader />
-              <main className="flex-1">{children}</main>
-            </div>
+            <QueryProvider>
+              <TooltipProvider>
+                <div className="flex min-h-svh flex-col">
+                  <SiteHeader />
+                  <main className="flex-1">{children}</main>
+                </div>
+              </TooltipProvider>
+            </QueryProvider>
           </ThemeProvider>
         </DirectionProvider>
       </body>

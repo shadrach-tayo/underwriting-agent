@@ -18,6 +18,7 @@ __all__ = [
     "RagConfig",
     "RagPipeline",
     "RetrievalResult",
+    "build_policy_rag_config",
     "citations_from_retrieval",
     "get_policy_pipeline",
     "policy_sources_dir",
@@ -52,20 +53,40 @@ def get_policy_pipeline(
     strategy: str | None = None,
     top_k: int | None = None,
 ) -> RagPipeline:
-    """Configured pipeline for underwriting policy retrieval (settings-backed)."""
+    """Configured pipeline for underwriting policy retrieval (settings-backed).
+
+    Generation uses DeepSeek via the OpenAI-compatible ChatOpenAI client
+    (``llm_model`` / ``llm_base_url`` / ``llm_api_key`` on ``RagConfig``).
+    """
+    return RagPipeline(build_policy_rag_config(
+        index_name=index_name,
+        strategy=strategy,
+        top_k=top_k,
+    ))
+
+
+def build_policy_rag_config(
+    *,
+    index_name: str | None = None,
+    strategy: str | None = None,
+    top_k: int | None = None,
+) -> RagConfig:
+    """Build the shared ``RagConfig`` used by ingest, search, and agent answer."""
     settings = get_settings()
-    return RagPipeline(
-        RagConfig(
-            index_name=index_name or settings.rag_index_name,
-            chunk_size=settings.rag_chunk_size,
-            chunk_overlap=settings.rag_chunk_overlap,
-            embedding_dim=settings.rag_embedding_dim,
-            embedding_model=settings.rag_embedding_model,
-            strategy=(strategy or settings.rag_strategy),  # type: ignore[arg-type]
-            top_k=top_k if top_k is not None else settings.rag_top_k,
-            rerank=False,
-            system_prompt=_LAYER_SYSTEM_PROMPT,
-        )
+    return RagConfig(
+        index_name=index_name or settings.rag_index_name,
+        chunk_size=settings.rag_chunk_size,
+        chunk_overlap=settings.rag_chunk_overlap,
+        embedding_dim=settings.rag_embedding_dim,
+        embedding_model=settings.rag_embedding_model,
+        strategy=(strategy or settings.rag_strategy),  # type: ignore[arg-type]
+        top_k=top_k if top_k is not None else settings.rag_top_k,
+        rerank=False,
+        llm_model=settings.rag_llm_model,
+        llm_temperature=settings.rag_llm_temperature,
+        llm_base_url=settings.deepseek_base_url,
+        llm_api_key=settings.deepseek_api_key,
+        system_prompt=_LAYER_SYSTEM_PROMPT,
     )
 
 

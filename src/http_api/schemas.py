@@ -47,6 +47,7 @@ class RagStatusResponse(BaseModel):
     row_count: int | None = None
     source_files: Sequence[str]
     voyage_configured: bool
+    deepseek_configured: bool
 
 
 class HealthResponse(BaseModel):
@@ -58,3 +59,55 @@ class ReadyResponse(BaseModel):
     status: Literal["ready", "not_ready"]
     database_reachable: bool
     detail: str | None = None
+
+
+ProgramLayerName = Literal[
+    "compliance_floor",
+    "eligibility_gate",
+    "sba_7a",
+    "cdfi_direct",
+]
+
+
+class RagSearchRequest(BaseModel):
+    """Playground / console policy retrieval."""
+
+    query: str = Field(min_length=1, max_length=4000)
+    top_k: int = Field(default=5, ge=1, le=20)
+    program: ProgramLayerName | None = Field(
+        default=None,
+        description="Optional policy-layer filter applied after retrieval.",
+    )
+    with_answer: bool = Field(
+        default=False,
+        description="If true, also call the LLM over retrieved context (agent search).",
+    )
+
+
+class RagHit(BaseModel):
+    clause_id: str
+    text: str
+    score: float
+    program: str
+    source: str
+    authority: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class RagSearchResponse(BaseModel):
+    query: str
+    index_name: str
+    strategy: str
+    program_filter: str | None = None
+    with_answer: bool = False
+    hits: list[RagHit]
+    answer: str | None = None
+
+
+class RagAskResponse(BaseModel):
+    query: str
+    index_name: str
+    strategy: str
+    program_filter: str | None = None
+    hits: list[RagHit]
+    answer: str

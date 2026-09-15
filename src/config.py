@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     voyage_api_key: str | None = None
+    # DeepSeek (OpenAI-compatible) — default generation backend for RagPipeline.generate
+    deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
+    rag_llm_model: str = "deepseek-chat"
+    rag_llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     langsmith_api_key: str | None = None
     langsmith_tracing: bool = False
     langsmith_project: str = "underwriting-agent"

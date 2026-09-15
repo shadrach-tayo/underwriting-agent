@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { adminHeaders, apiBase, readApiError } from "@/lib/api"
 
 type RagStatus = {
   index_name: string
@@ -25,6 +26,7 @@ type RagStatus = {
   row_count: number | null
   source_files: string[]
   voyage_configured: boolean
+  deepseek_configured: boolean
 }
 
 type IngestResponse = {
@@ -34,18 +36,6 @@ type IngestResponse = {
   source_units: number
   by_program: Record<string, number>
   source_files: string[]
-}
-
-const apiBase = () =>
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://127.0.0.1:8080"
-
-function adminHeaders(): HeadersInit {
-  const headers: HeadersInit = { "Content-Type": "application/json" }
-  const key = process.env.NEXT_PUBLIC_ADMIN_API_KEY
-  if (key) {
-    headers["X-Admin-Key"] = key
-  }
-  return headers
 }
 
 export default function AdminPage() {
@@ -64,7 +54,7 @@ export default function AdminPage() {
         headers: adminHeaders(),
       })
       if (!res.ok) {
-        throw new Error(`Status ${res.status}: ${await res.text()}`)
+        throw new Error(await readApiError(res, "Status request failed"))
       }
       setStatus((await res.json()) as RagStatus)
     } catch (err) {
@@ -89,7 +79,7 @@ export default function AdminPage() {
         body: JSON.stringify({ dry_run: dryRun }),
       })
       if (!res.ok) {
-        throw new Error(`Ingest ${res.status}: ${await res.text()}`)
+        throw new Error(await readApiError(res, "Ingest failed"))
       }
       setIngestResult((await res.json()) as IngestResponse)
       if (!dryRun) {
@@ -162,6 +152,10 @@ export default function AdminPage() {
                   <dt className="text-muted-foreground">Voyage</dt>
                   <dd>
                     {status.voyage_configured ? "configured" : "missing key"}
+                  </dd>
+                  <dt className="text-muted-foreground">DeepSeek</dt>
+                  <dd>
+                    {status.deepseek_configured ? "configured" : "missing key"}
                   </dd>
                 </dl>
                 <Separator />

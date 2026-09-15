@@ -79,6 +79,7 @@ def rag_status(settings: SettingsDep) -> RagStatusResponse:
         row_count=stats.get("row_count"),
         source_files=list_policy_source_files(),
         voyage_configured=bool((settings.voyage_api_key or "").strip()),
+        deepseek_configured=bool((settings.deepseek_api_key or "").strip()),
     )
 
 

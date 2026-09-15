@@ -28,7 +28,9 @@ uv run underwriting-api
 |------|---------|
 | `/` | Hub |
 | `/admin` | RAG status + ingest (calls `/admin/rag/*`) |
-| `/playground` | Agent interaction stub |
+| `/playground` | Overview + sidebar |
+| `/playground/rag` | Policy RAG search (+ opt-in agent answer) |
+| `/playground/underwrite` | Applicant → agent stub |
 
 ## Env
 

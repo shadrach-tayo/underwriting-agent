@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from http_api.admin import router as admin_rag_router
 from http_api.db import ping_database
+from http_api.rag import router as rag_router
 from http_api.schemas import HealthResponse, ReadyResponse
 from version import __version__
 
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     application.include_router(admin_rag_router)
+    application.include_router(rag_router)
 
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

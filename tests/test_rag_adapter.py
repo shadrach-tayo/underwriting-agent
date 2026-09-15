@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from rag.pipeline import RetrievalResult
 
 from models import PolicyLayer
@@ -60,3 +62,27 @@ def test_resolve_program_layers() -> None:
 
 def test_policy_index_name() -> None:
     assert POLICY_INDEX.startswith("underwriting_policy")
+
+
+def test_build_policy_rag_config_uses_deepseek() -> None:
+    from config import Settings, get_settings
+    from policy_rag import build_policy_rag_config
+
+    get_settings.cache_clear()
+    try:
+        with patch(
+            "policy_rag.get_settings",
+            return_value=Settings(
+                deepseek_api_key="sk-test",
+                deepseek_base_url="https://api.deepseek.com",
+                rag_llm_model="deepseek-chat",
+            ),
+        ):
+            cfg = build_policy_rag_config(top_k=3)
+        assert cfg.llm_model == "deepseek-chat"
+        assert cfg.llm_base_url == "https://api.deepseek.com"
+        assert cfg.llm_api_key == "sk-test"
+        assert cfg.top_k == 3
+        assert cfg.rerank is False
+    finally:
+        get_settings.cache_clear()
