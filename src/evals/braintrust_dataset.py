@@ -125,7 +125,7 @@ def load_braintrust_dataset(
     *,
     project: str | None = None,
     name: str | None = None,
-):
+) -> Any:
     """Return an ``init_dataset`` handle for use as ``Eval(..., data=...)``."""
     if not braintrust_api_configured():
         raise RuntimeError("BRAINTRUST_API_KEY is required to load a Braintrust dataset")

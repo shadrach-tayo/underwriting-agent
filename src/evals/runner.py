@@ -250,7 +250,7 @@ def braintrust_eval(
         dataset_meta = "braintrust"
     else:
 
-        def data() -> Any:  # type: ignore[no-redef]
+        def iter_local_data() -> Any:
             for case in local_cases:
                 rec = gold_case_to_record(case)
                 yield {
@@ -260,6 +260,7 @@ def braintrust_eval(
                     "tags": rec["tags"],
                 }
 
+        data = iter_local_data
         dataset_meta = "local_gold"
 
     return Eval(
