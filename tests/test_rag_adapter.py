@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from rag.pipeline import RetrievalResult
 
-from underwriting_agent.models import PolicyLayer
-from underwriting_agent.rag import POLICY_INDEX, citations_from_retrieval, policy_sources_dir
-from underwriting_agent.rag.tags import resolve_program
+from models import PolicyLayer
+from policy_rag import POLICY_INDEX, citations_from_retrieval, policy_sources_dir
+from policy_rag.tags import resolve_program
 
 
 def test_policy_sources_dir_exists() -> None:

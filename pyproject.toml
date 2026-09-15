@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "agent",
+    "braintrust>=0.39.0",
     "claude-agent-sdk>=0.2.124",
     "deepeval>=4.1.2",
     "fastapi>=0.139.2",
@@ -30,13 +31,22 @@ dependencies = [
 ]
 
 [project.scripts]
-underwriting-agent = "underwriting_agent:main"
-underwriting-rag-ingest = "underwriting_agent.rag.ingest:main"
-underwriting-api = "underwriting_agent.api:run"
+underwriting-agent = "version:main"
+underwriting-rag-ingest = "policy_rag.ingest:main"
+underwriting-api = "http_api:run"
+underwriting-gold-set = "evals.generate_gold_set:main"
+underwriting-evals = "evals.__main__:main"
 
 [build-system]
-requires = ["uv_build>=0.11.28,<0.12.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["models", "config", "subagent_state", "version"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["agents*", "http_api*", "graph*", "policy_rag*", "evals*", "mcp_server*"]
 
 [dependency-groups]
 dev = [
@@ -61,7 +71,7 @@ select = ["E", "F", "I", "UP"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["underwriting_agent"]
+packages = ["agents", "http_api", "graph", "policy_rag", "evals", "mcp_server"]
 
 [tool.basedpyright]
 venvPath = "."

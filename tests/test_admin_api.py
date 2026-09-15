@@ -8,17 +8,17 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from underwriting_agent.api import create_app
-from underwriting_agent.config import Settings, get_settings
-from underwriting_agent.rag.ingest import IngestResult
+from http_api import create_app
+from config import Settings, get_settings
+from policy_rag.ingest import IngestResult
 
 
 @contextmanager
 def _override_settings(settings: Settings) -> Iterator[TestClient]:
     get_settings.cache_clear()
     with (
-        patch("underwriting_agent.api.deps.get_settings", return_value=settings),
-        patch("underwriting_agent.config.get_settings", return_value=settings),
+        patch("http_api.deps.get_settings", return_value=settings),
+        patch("config.get_settings", return_value=settings),
     ):
         yield TestClient(create_app())
     get_settings.cache_clear()
@@ -33,7 +33,7 @@ def test_health() -> None:
 
 def test_ready_reports_db() -> None:
     client = TestClient(create_app())
-    with patch("underwriting_agent.api.ping_database", return_value=True):
+    with patch("http_api.ping_database", return_value=True):
         res = client.get("/ready")
     assert res.status_code == 200
     body = res.json()
@@ -48,11 +48,11 @@ def test_admin_ingest_dry_run() -> None:
     with (
         _override_settings(settings) as client,
         patch(
-            "underwriting_agent.api.admin.load_policy_documents",
+            "http_api.admin.load_policy_documents",
             return_value=[docs_meta],
         ),
         patch(
-            "underwriting_agent.api.admin.list_policy_source_files",
+            "http_api.admin.list_policy_source_files",
             return_value=["cdfi_direct_accion_criteria.md"],
         ),
     ):
@@ -85,7 +85,7 @@ def test_admin_ingest_runs_pipeline() -> None:
     )
     with (
         _override_settings(settings) as client,
-        patch("underwriting_agent.api.admin.ingest_policy_sources", return_value=result),
+        patch("http_api.admin.ingest_policy_sources", return_value=result),
     ):
         res = client.post("/admin/rag/ingest", json={})
     assert res.status_code == 200
@@ -101,12 +101,12 @@ def test_admin_requires_key_when_configured() -> None:
         denied = client.get("/admin/rag/status")
         assert denied.status_code == 401
         with (
-            patch("underwriting_agent.api.admin.ping_database", return_value=False),
+            patch("http_api.admin.ping_database", return_value=False),
             patch(
-                "underwriting_agent.api.admin.index_stats",
+                "http_api.admin.index_stats",
                 return_value={"index_exists": None, "row_count": None},
             ),
-            patch("underwriting_agent.api.admin.list_policy_source_files", return_value=[]),
+            patch("http_api.admin.list_policy_source_files", return_value=[]),
         ):
             ok = client.get("/admin/rag/status", headers={"X-Admin-Key": "secret"})
         assert ok.status_code == 200

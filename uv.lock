@@ -5831,6 +5831,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "agent" },
+    { name = "braintrust" },
     { name = "claude-agent-sdk" },
     { name = "deepeval" },
     { name = "fastapi" },
@@ -5863,6 +5864,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent", git = "ssh://git@github.com/shadrach-tayo/ai-engineering-boilerplate.git?rev=eval" },
+    { name = "braintrust", specifier = ">=0.39.0" },
     { name = "claude-agent-sdk", specifier = ">=0.2.124" },
     { name = "deepeval", specifier = ">=4.1.2" },
     { name = "fastapi", specifier = ">=0.139.2" },

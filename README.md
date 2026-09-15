@@ -14,19 +14,20 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 | Vector DB | pgvector on Postgres |
 | API | FastAPI |
 | MCP | FastMCP |
-| Evals | DeepEval + RAGAS + custom LLM-as-judge |
-| Observability | LangSmith |
+| Evals | DeepEval + Braintrust (+ RAGAS when importable) |
+| Observability | Braintrust (evals/runtime) + LangSmith (LangGraph Studio) |
 | Package / env | **uv** (`.venv`) |
 | Web UI | Next.js + shadcn (`web/`) |
 
 ## Layout
 
 ```text
-src/underwriting_agent/
+src/
   graph/          # GraphState/SubagentState, nodes, hash-chained audit
   agents/         # Financial, Policy, Critic (SubagentOutput / CritiqueReport)
   mcp_server/     # FastMCP tools
   api/            # FastAPI health/ready + admin RAG ingest
+  policy_rag/     # Policy corpus ingest + RagPipeline adapter (≠ dependency `rag`)
   evals/          # Eval suite (Week 4)
   models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
@@ -84,13 +85,13 @@ uv run langgraph validate   # check langgraph.json
 uv run langgraph dev --no-browser
 ```
 
-Graph ID: `underwriting` → `src/underwriting_agent/graph/__init__.py:graph`
+Graph ID: `underwriting` → `src/graph/__init__.py:graph`
 
 `langchain-community` is pinned to `0.3.29` so `ragas` can import (newer community builds dropped `chat_models.vertexai`). Revisit when upgrading evals in Week 4.
 
 ## Hard-coded risk ceiling
 
-`RISK_CEILING` (default `0.75`) is enforced in `underwriting_agent.graph.apply_risk_ceiling` — not in prompts. Cases at or above the ceiling always escalate. Prompt-injection bypass tests land in Week 2 Day 3.
+`RISK_CEILING` (default `0.75`) is enforced in `graph.apply_risk_ceiling` — not in prompts. Cases at or above the ceiling always escalate. Prompt-injection bypass tests land in Week 2 Day 3.
 
 ## Roadmap pace
 

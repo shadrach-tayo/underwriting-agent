@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+src/*.egg-info/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/

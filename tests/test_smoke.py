@@ -4,10 +4,10 @@ from typing import Any
 
 from langgraph.types import Send
 
-from underwriting_agent.agents import analyze_financials, check_policy_compliance
-from underwriting_agent.graph import apply_risk_ceiling, build_graph
-from underwriting_agent.graph.nodes import route_after_critic
-from underwriting_agent.models import (
+from agents import analyze_financials, check_policy_compliance
+from graph import apply_risk_ceiling, build_graph
+from graph.nodes import route_after_critic
+from models import (
     Applicant,
     CritiqueReport,
     CritiqueVerdict,
