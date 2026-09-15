@@ -731,7 +731,7 @@ function ImprovementActionsView({
 }
 
 function CitationsList({ citations }: { citations: Citation[] }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(true)
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-t pt-6">
@@ -754,16 +754,16 @@ function CitationsList({ citations }: { citations: Citation[] }) {
               <Badge variant="secondary">
                 {formatProgram(citation.program)}
               </Badge>
-              <SourceLink
-                href={citation.source.url}
-                className="truncate text-[11px]"
-              >
-                {citation.source.title || citation.source.name}
-              </SourceLink>
               <span className="text-[11px] text-muted-foreground tabular-nums">
                 sim {citation.similarity_score.toFixed(2)}
               </span>
             </div>
+            <SourceLink
+              href={citation.source.url}
+              className="mt-2 block truncate text-sm"
+            >
+              {citation.source.title || citation.source.name}
+            </SourceLink>
             {citation.retrieved_text ? (
               <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                 {citation.retrieved_text}

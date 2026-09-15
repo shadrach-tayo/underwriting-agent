@@ -308,40 +308,42 @@ function ResultsSection({
               <ol className="space-y-2">
                 {result.hits.map((hit, index) => (
                   <li key={hitKey(hit, index)}>
-                    <button
-                      type="button"
-                      onClick={() => openReference(index)}
-                      className={cn(
-                        "flex w-full items-start gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5 text-start transition-colors",
-                        "hover:border-border hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      )}
-                    >
-                      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-background font-mono text-[11px] font-medium ring-1 ring-border">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 space-y-1">
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant="secondary" className="font-normal">
-                            {hit.program}
-                          </Badge>
-                          <Badge
-                            variant={scoreTone(hit.score)}
-                            className="font-mono font-normal"
-                          >
-                            {hit.score.toFixed(3)}
-                          </Badge>
-                          <SourceLink
-                            href={hit.url}
-                            className="truncate font-mono text-[11px]"
-                          >
-                            {hit.title || sourceLabel(hit.source)}
-                          </SourceLink>
+                    <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => openReference(index)}
+                        className={cn(
+                          "flex w-full items-start gap-3 text-start transition-colors",
+                          "hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                        )}
+                      >
+                        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-background font-mono text-[11px] font-medium ring-1 ring-border">
+                          {index + 1}
                         </span>
-                        <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                          {snippet(hit.text)}
+                        <span className="min-w-0 flex-1 space-y-1">
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="secondary" className="font-normal">
+                              {hit.program}
+                            </Badge>
+                            <Badge
+                              variant={scoreTone(hit.score)}
+                              className="font-mono font-normal"
+                            >
+                              {hit.score.toFixed(3)}
+                            </Badge>
+                          </span>
+                          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                            {snippet(hit.text)}
+                          </span>
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                      <SourceLink
+                        href={hit.url}
+                        className="mt-2 block truncate ps-9 font-mono text-[11px]"
+                      >
+                        {hit.title || sourceLabel(hit.source)}
+                      </SourceLink>
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -408,8 +410,9 @@ function ResultsSection({
                   >
                     <CollapsibleTrigger
                       className={cn(
-                        "group/hit flex w-full items-start gap-3 px-4 py-3 text-start outline-none",
-                        "focus-visible:ring-3 focus-visible:ring-ring/50"
+                        "group/hit flex w-full items-start gap-3 px-4 pt-3 text-start outline-none",
+                        "focus-visible:ring-3 focus-visible:ring-ring/50",
+                        open ? "pb-1.5" : "pb-3"
                       )}
                     >
                       <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-[11px] font-medium text-muted-foreground">
@@ -430,12 +433,6 @@ function ResultsSection({
                             </Badge>
                           ) : null}
                         </span>
-                        <SourceLink
-                          href={hit.url}
-                          className="block truncate font-mono text-[11px]"
-                        >
-                          {hit.title || hit.source}
-                        </SourceLink>
                         {!open ? (
                           <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                             {snippet(hit.text, 180)}
@@ -451,6 +448,12 @@ function ResultsSection({
                         )}
                       />
                     </CollapsibleTrigger>
+                    <SourceLink
+                      href={hit.url}
+                      className="block truncate px-4 pb-3 ps-13 font-mono text-[11px]"
+                    >
+                      {hit.title || hit.source}
+                    </SourceLink>
                     <CollapsibleContent className="overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up">
                       <div className="space-y-3 border-t border-border/70 px-4 py-3 ps-13">
                         <Markdown>{hit.text}</Markdown>

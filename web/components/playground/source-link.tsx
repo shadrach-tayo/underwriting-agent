@@ -25,7 +25,7 @@ export function SourceLink({
       rel="noopener noreferrer"
       onClick={(event) => event.stopPropagation()}
       className={cn(
-        "text-primary underline-offset-2 hover:underline",
+        "relative z-10 text-primary underline underline-offset-2 hover:text-primary/80",
         className
       )}
     >

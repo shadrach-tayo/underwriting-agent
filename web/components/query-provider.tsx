@@ -62,7 +62,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       persistOptions={{
         persister,
         maxAge: 24 * 60 * 60 * 1000,
-        buster: "v2",
+        buster: "v3-source-urls",
       }}
     >
       {children}
