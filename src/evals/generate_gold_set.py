@@ -14,60 +14,27 @@ import json
 from pathlib import Path
 
 from evals.gold_set import GOLD_SET_PATH, GoldCase, GoldLabel
-from models import Applicant, DecisionOutcome, LoanProgram, RiskTier
+from agents.program_routing import compute_program_routing
+from models import Applicant, DecisionOutcome, RiskTier
 
-# SBA 7(a) SBSS floor used for gold labeling (SOP-style threshold).
-SBSS_SBA_MIN = 165
-CDFI_REVENUE_MIN = 50_000.0
-CDFI_YEARS_MIN = 1.0
-
-# Illustrative ineligible types under the shared eligibility gate (13 CFR 120.110 style).
-INELIGIBLE_INDUSTRIES = {
-    "gambling",
-    "speculative real estate",
-    "passive investment holding",
-}
+# Re-export routing constants for callers / docs that imported them here.
+from agents.program_routing import (  # noqa: F401
+    CDFI_REVENUE_MIN,
+    CDFI_YEARS_MIN,
+    INELIGIBLE_INDUSTRIES,
+    SBSS_SBA_MIN,
+)
 
 
 def _label_applicant(applicant: Applicant, *, tags: list[str], rationale: str, refs: list[str]) -> GoldLabel:
-    compliance_ok = not bool(applicant.metadata.get("compliance_violation"))
-    eligibility_ok = (
-        applicant.industry.lower() not in INELIGIBLE_INDUSTRIES
-        and not bool(applicant.metadata.get("ineligible_business"))
-    )
-
+    routing = compute_program_routing(applicant)
+    compliance_ok = routing.compliance_floor_pass
+    eligibility_ok = routing.eligibility_gate_pass
     hard_reject = applicant.has_bankruptcy or applicant.has_severe_fraud_alert
-    eligible: list[str] = []
-
-    if compliance_ok and eligibility_ok and not hard_reject:
-        sbss = applicant.sbss_proxy
-        sba_ok = (
-            sbss is not None
-            and sbss >= SBSS_SBA_MIN
-            and (applicant.debt_service_coverage_ratio or 0) >= 1.15
-            and (applicant.credit_score_proxy or 0) >= 640
-        )
-        cdfi_ok = (
-            applicant.annual_revenue >= CDFI_REVENUE_MIN
-            and applicant.years_in_business >= CDFI_YEARS_MIN
-            and (applicant.credit_score_proxy is None or applicant.credit_score_proxy >= 580)
-        )
-        if sba_ok:
-            eligible.append("sba_7a")
-        if cdfi_ok:
-            eligible.append("cdfi_direct")
-
-    recommended: str | None = None
-    if "sba_7a" in eligible and "cdfi_direct" in eligible:
-        recommended = (
-            applicant.requested_program.value
-            if applicant.requested_program
-            else "sba_7a"
-        )
-    elif "sba_7a" in eligible:
-        recommended = "sba_7a"
-    elif "cdfi_direct" in eligible:
-        recommended = "cdfi_direct"
+    eligible = [p.value for p in routing.eligible_programs]
+    recommended = (
+        routing.recommended_program.value if routing.recommended_program else None
+    )
 
     # Outcome
     if not compliance_ok:

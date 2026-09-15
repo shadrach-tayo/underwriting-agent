@@ -55,7 +55,7 @@ def score_case(
     """Score one (gold, prediction) pair with DeepEval custom + retrieval metrics."""
     test_case = LLMTestCase(
         input=gold.applicant.model_dump_json(),
-        actual_output=pred.decision.rationale,
+        actual_output=pred.decision.rationale.text,
         expected_output=gold.label.rationale,
     )
 

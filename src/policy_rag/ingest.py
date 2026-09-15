@@ -23,6 +23,7 @@ from langchain_core.documents import Document
 from config import IngestTarget, get_settings
 from models import PolicyLayer
 from policy_rag import get_policy_pipeline, policy_sources_dir
+from policy_rag.catalog import lookup_source
 from policy_rag.tags import resolve_program
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,8 @@ class IngestResult:
 
 
 def _base_metadata(path: Path, *, page: int, program: PolicyLayer) -> dict[str, Any]:
-    return {
+    entry = lookup_source(path.name)
+    meta: dict[str, Any] = {
         "page": page,
         "source": path.name,
         "file": path.name,
@@ -48,6 +50,17 @@ def _base_metadata(path: Path, *, page: int, program: PolicyLayer) -> dict[str, 
         "corpus": "underwriting_policy",
         "program": program.value,
     }
+    if entry is None:
+        return meta
+    meta["title"] = entry.title
+    meta["authority"] = entry.authority
+    if entry.url:
+        meta["url"] = entry.url
+    if entry.version:
+        meta["version"] = entry.version
+    if entry.effective_date:
+        meta["effective_date"] = entry.effective_date
+    return meta
 
 
 def _load_pdf_pages(path: Path) -> list[Document]:
@@ -134,6 +147,8 @@ def list_policy_source_files(data_dir: Path | None = None) -> list[str]:
     for path in sorted(root.iterdir()):
         if path.name.startswith(".") or path.name.upper().startswith("SOURCES"):
             continue
+        if path.name == "catalog.json":
+            continue
         if path.suffix.lower() in {".gitkeep"} or not path.is_file():
             continue
         if path.suffix.lower() in {".pdf", ".docx", ".doc", ".md"}:
@@ -147,6 +162,8 @@ def load_policy_documents(data_dir: Path | None = None) -> list[Document]:
     documents: list[Document] = []
     for path in sorted(root.iterdir()):
         if path.name.startswith(".") or path.name.upper().startswith("SOURCES"):
+            continue
+        if path.name == "catalog.json":
             continue
         if path.suffix.lower() in {".gitkeep"} or not path.is_file():
             continue

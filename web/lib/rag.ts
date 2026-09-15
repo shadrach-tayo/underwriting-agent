@@ -14,6 +14,8 @@ export type RagHit = {
   program: string
   source: string
   authority: string
+  url?: string | null
+  title?: string | null
 }
 
 export type RagSearchResponse = {

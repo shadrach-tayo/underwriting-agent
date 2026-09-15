@@ -53,7 +53,9 @@ def critique_outputs(
         )
         if not passed:
             rerun.append(SubagentName.FINANCIAL)
-        notes.append(financial.conclusion)
+            notes.append(f"Financial gaps: {', '.join(deficiencies)}")
+        else:
+            notes.append("Financial output checks passed")
 
     if policy is None:
         per_agent.append(
@@ -89,8 +91,11 @@ def critique_outputs(
         )
         if not passed:
             rerun.append(SubagentName.POLICY)
-        notes.append(policy.conclusion)
-
+            notes.append(f"Policy gaps: {', '.join(deficiencies)}")
+        else:
+            notes.append(
+                f"Policy checks passed ({len(policy.citations)} citations)"
+            )
     if FORCE_RETRY_ONCE and cycle == 0 and not rerun:
         rerun.append(SubagentName.FINANCIAL)
         notes.append("adversarial_pass_requested")

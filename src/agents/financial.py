@@ -24,7 +24,9 @@ def _tier_and_score(applicant: Applicant) -> tuple[RiskTier, float]:
 
 def run_financial_subagent(state: SubagentState) -> SubagentOutput:
     """Run one financial analysis cycle from isolated SubagentState."""
-    applicant = state["applicant"]
+    applicant = state.get("applicant")
+    if applicant is None:
+        raise ValueError("applicant is required")
     retry_index = state.get("retry_index", 0)
     feedback = state.get("critique_feedback")
 
@@ -55,7 +57,11 @@ def run_financial_subagent(state: SubagentState) -> SubagentOutput:
     )
     return SubagentOutput(
         agent=SubagentName.FINANCIAL,
-        conclusion=f"Financial risk tier={tier.value} score={score:.2f}",
+        conclusion=(
+            f"{tier.value.title()} financial risk "
+            f"(score {score:.2f})"
+            + (f" with DSCR {dscr:.2f}x" if dscr is not None else "")
+        ),
         confidence=max(0.0, 1.0 - score),
         reasoning_trace="; ".join(notes),
         metrics=metrics,

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 
 def _now() -> datetime:
@@ -106,6 +106,10 @@ class PolicySource(BaseModel):
     effective_date: datetime
     # Layer tag mirrored from chunk metadata ``program``.
     program: PolicyLayer = PolicyLayer.COMPLIANCE_FLOOR
+    # Catalog display title (falls back to ``name`` / filename in the UI).
+    title: str | None = None
+    # Origin / download URL from ``data/policy_sources/catalog.json``.
+    url: str | None = None
 
 
 class Citation(BaseModel):
@@ -141,6 +145,16 @@ class PolicyConflict(BaseModel):
     proposed_reading: Optional[str] = None
 
 
+class ProgramRouting(BaseModel):
+    """Which product track(s) the applicant fits — independent of approve/deny."""
+
+    compliance_floor_pass: bool = True
+    eligibility_gate_pass: bool = True
+    eligible_programs: list[LoanProgram] = Field(default_factory=list)
+    recommended_program: LoanProgram | None = None
+    ineligible_reasons: dict[str, str] = Field(default_factory=dict)
+
+
 class SubagentOutput(BaseModel):
     """Uniform output for financial + policy subagents."""
 
@@ -151,6 +165,7 @@ class SubagentOutput(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     conflicts: list[PolicyConflict] = Field(default_factory=list)
     metrics: Optional[FinancialMetrics] = None
+    program_routing: Optional[ProgramRouting] = None
     hard_reject: bool = False
     hard_reject_reason: Optional[str] = None
     retry_index: int = 0
@@ -204,14 +219,146 @@ class AdverseActionReason(BaseModel):
     supporting_citations: list[str] = Field(default_factory=list)
 
 
-class ProgramRouting(BaseModel):
-    """Which product track(s) the applicant fits — independent of approve/deny."""
+class ImprovementArea(StrEnum):
+    FINANCIAL = "financial"
+    CREDIT = "credit"
+    POLICY = "policy"
+    PROGRAM = "program"
+    STRUCTURE = "structure"
 
-    compliance_floor_pass: bool = True
-    eligibility_gate_pass: bool = True
-    eligible_programs: list[LoanProgram] = Field(default_factory=list)
-    recommended_program: LoanProgram | None = None
-    ineligible_reasons: dict[str, str] = Field(default_factory=dict)
+
+class ImprovementPriority(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ImprovementAction(BaseModel):
+    """Concrete step that would improve auto-approve odds."""
+
+    area: ImprovementArea
+    priority: ImprovementPriority = ImprovementPriority.MEDIUM
+    title: str
+    detail: str
+    target: str | None = None
+
+
+class RationaleKind(StrEnum):
+    FINANCIAL = "financial"
+    POLICY = "policy"
+    CRITIC = "critic"
+    ENVELOPE = "envelope"
+    HARD_REJECT = "hard_reject"
+    HUMAN = "human"
+    ROUTING = "routing"
+    GENERAL = "general"
+
+
+class RationaleFactTone(StrEnum):
+    PASS = "pass"
+    FAIL = "fail"
+    WARN = "warn"
+    NEUTRAL = "neutral"
+    INFO = "info"
+
+
+class RationaleFact(BaseModel):
+    """Single labeled metric/fact for UI rendering (not raw key=value prose)."""
+
+    key: str
+    label: str
+    value: str
+    tone: RationaleFactTone = RationaleFactTone.NEUTRAL
+    detail: str | None = None
+
+
+class RationaleSection(BaseModel):
+    """One labeled block inside a decision rationale (UI-friendly)."""
+
+    kind: RationaleKind = RationaleKind.GENERAL
+    title: str
+    body: str = ""
+    facts: list[RationaleFact] = Field(default_factory=list)
+
+
+class DecisionRationale(BaseModel):
+    """Structured underwriting rationale — summary + optional sections."""
+
+    summary: str
+    sections: list[RationaleSection] = Field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        """Flat string for evals / audit hashing that expect prose."""
+        parts: list[str] = []
+        if self.summary.strip():
+            parts.append(self.summary.strip())
+        for section in self.sections:
+            body = section.body.strip()
+            if body and body != self.summary.strip():
+                parts.append(body)
+        return "; ".join(parts)
+
+    def __str__(self) -> str:
+        return self.text
+
+    @classmethod
+    def from_text(
+        cls,
+        text: str,
+        *,
+        kind: RationaleKind = RationaleKind.GENERAL,
+        title: str | None = None,
+    ) -> DecisionRationale:
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return cls(summary="", sections=[])
+        section_title = title or kind.value.replace("_", " ").title()
+        return cls(
+            summary=cleaned,
+            sections=[
+                RationaleSection(kind=kind, title=section_title, body=cleaned)
+            ],
+        )
+
+    def with_section(
+        self,
+        *,
+        kind: RationaleKind,
+        title: str,
+        body: str,
+        facts: list[RationaleFact] | None = None,
+        update_summary: bool = False,
+    ) -> DecisionRationale:
+        cleaned = (body or "").strip()
+        if not cleaned and not facts:
+            return self
+        sections = [
+            *self.sections,
+            RationaleSection(
+                kind=kind,
+                title=title,
+                body=cleaned,
+                facts=list(facts or []),
+            ),
+        ]
+        summary = cleaned if update_summary or not self.summary.strip() else self.summary
+        if not summary and facts:
+            summary = title
+        return self.model_copy(update={"summary": summary, "sections": sections})
+
+
+def _coerce_decision_rationale(value: Any) -> Any:
+    if isinstance(value, DecisionRationale):
+        return value
+    if isinstance(value, str):
+        return DecisionRationale.from_text(value)
+    return value
+
+
+DecisionRationaleField = Annotated[
+    DecisionRationale, BeforeValidator(_coerce_decision_rationale)
+]
 
 
 class Decision(BaseModel):
@@ -220,10 +367,11 @@ class Decision(BaseModel):
     risk_tier: RiskTier
     ceiling_triggered: bool
     composite_score: Optional[CompositeScore] = None
-    rationale: str
+    rationale: DecisionRationaleField
     program_routing: Optional[ProgramRouting] = None
     adverse_action_reasons: list[AdverseActionReason] = Field(default_factory=list)
     term_modifications: list[str] = Field(default_factory=list)
+    improvement_actions: list[ImprovementAction] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
     decided_at: datetime = Field(default_factory=_now)
 
@@ -232,7 +380,9 @@ class EscalationPackage(BaseModel):
     """Evidence bundle for the Human Review UI / resolution queue."""
 
     reason: str
-    rationale: str = ""
+    rationale: DecisionRationaleField = Field(
+        default_factory=lambda: DecisionRationale(summary="", sections=[])
+    )
     financial_summary: str = ""
     compliance_summary: str = ""
     citations: list[Citation] = Field(default_factory=list)

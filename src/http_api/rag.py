@@ -41,6 +41,8 @@ def _hits_from_result(result: Any, *, program: str | None) -> list[RagHit]:
                 program=cite.program.value,
                 source=cite.source.name,
                 authority=cite.source.authority,
+                url=cite.source.url,
+                title=cite.source.title,
                 metadata={
                     "version": cite.source.version,
                 },

@@ -1,27 +1,50 @@
-"""Policy Compliance subagent — citations + hard-reject rules (RAG/SDK later)."""
+"""Policy Compliance subagent — RAG citations + layered program routing."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import logging
 
+from agents.program_routing import compute_program_routing
 from models import (
     Applicant,
     Citation,
-    PolicyLayer,
-    PolicySource,
     SubagentName,
     SubagentOutput,
 )
 from subagent_state import SubagentState
 
-_STUB_SOURCE = PolicySource(
-    source_id="stub-policy",
-    name="Stub underwriting policy",
-    authority="lender",
-    version="0.1.0",
-    effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
-    program=PolicyLayer.CDFI_DIRECT,
-)
+logger = logging.getLogger(__name__)
+
+
+def _policy_query(applicant: Applicant) -> str:
+    parts = [
+        f"SME loan policy for {applicant.industry} business",
+        f"annual revenue {applicant.annual_revenue:.0f}",
+        f"requested loan {applicant.requested_loan_amount:.0f}",
+        f"{applicant.years_in_business} years in business",
+        "compliance floor eligibility gate SBA 7(a) CDFI Direct SBSS",
+    ]
+    if applicant.sbss_proxy is not None:
+        parts.append(f"SBSS score {applicant.sbss_proxy}")
+    if applicant.credit_score_proxy is not None:
+        parts.append(f"credit score {applicant.credit_score_proxy}")
+    if applicant.requested_program is not None:
+        parts.append(f"requested program {applicant.requested_program.value}")
+    return ". ".join(parts)
+
+
+def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -> list[Citation]:
+    if reuse:
+        return list(reuse)
+    try:
+        from policy_rag import citations_from_retrieval, get_policy_pipeline
+
+        pipeline = get_policy_pipeline()
+        result = pipeline.retrieve(_policy_query(applicant))
+        return citations_from_retrieval(result)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Policy RAG retrieve failed (%s); continuing without citations", exc)
+        return []
 
 
 def run_policy_subagent(state: SubagentState) -> SubagentOutput:
@@ -29,31 +52,36 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     applicant = state["applicant"]
     retry_index = state.get("retry_index", 0)
     feedback = state.get("critique_feedback")
+    prior = state.get("prior_output")
 
-    citations = [
-        Citation(
-            clause_id="placeholder-1",
-            source=_STUB_SOURCE,
-            retrieved_text="Policy retrieval not yet implemented.",
-            similarity_score=0.5,
-            program=PolicyLayer.CDFI_DIRECT,
-            grounding_score=None,
-            grounded=None,
-        )
+    reuse: list[Citation] | None = None
+    if state.get("reuse_evidence") and prior is not None and prior.citations:
+        reuse = list(prior.citations)
+
+    citations = _retrieve_citations(applicant, reuse=reuse)
+    routing = compute_program_routing(applicant)
+
+    notes = [
+        f"compliance_floor={'pass' if routing.compliance_floor_pass else 'fail'}",
+        f"eligibility_gate={'pass' if routing.eligibility_gate_pass else 'fail'}",
+        f"eligible={','.join(p.value for p in routing.eligible_programs) or 'none'}",
+        f"citations={len(citations)}",
     ]
-    notes = ["stub_policy_pass"]
+    if routing.recommended_program:
+        notes.append(f"recommended={routing.recommended_program.value}")
     if feedback and feedback.notes:
         notes.append(f"critic_feedback: {feedback.notes}")
-    if state.get("reuse_evidence") and state.get("prior_output"):
+    if reuse:
         notes.append("reuse_evidence=true (re-reason pass)")
 
     if applicant.has_bankruptcy:
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion="HARD_REJECT: bankruptcy",
+            conclusion="Hard reject — bankruptcy on file",
             confidence=1.0,
             reasoning_trace="; ".join(notes + ["hard_reject:bankruptcy"]),
             citations=citations,
+            program_routing=routing,
             hard_reject=True,
             hard_reject_reason="Bankruptcy on file — auto-deny per policy",
             retry_index=retry_index,
@@ -62,21 +90,100 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     if applicant.has_severe_fraud_alert:
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion="HARD_REJECT: fraud_alert",
+            conclusion="Hard reject — severe fraud alert",
             confidence=1.0,
             reasoning_trace="; ".join(notes + ["hard_reject:fraud_alert"]),
             citations=citations,
+            program_routing=routing,
             hard_reject=True,
             hard_reject_reason="Severe fraud alert — auto-deny per policy",
             retry_index=retry_index,
         )
 
+    if not routing.compliance_floor_pass:
+        reason = routing.ineligible_reasons.get(
+            "compliance_floor", "Compliance floor violation"
+        )
+        return SubagentOutput(
+            agent=SubagentName.POLICY,
+            conclusion=f"Hard reject — {reason}",
+            confidence=1.0,
+            reasoning_trace="; ".join(notes + [reason]),
+            citations=citations,
+            program_routing=routing,
+            hard_reject=True,
+            hard_reject_reason=reason,
+            retry_index=retry_index,
+        )
+
+    if not routing.eligibility_gate_pass:
+        reason = routing.ineligible_reasons.get(
+            "eligibility_gate", "Eligibility gate failure"
+        )
+        return SubagentOutput(
+            agent=SubagentName.POLICY,
+            conclusion=f"Hard reject — {reason}",
+            confidence=1.0,
+            reasoning_trace="; ".join(notes + [reason]),
+            citations=citations,
+            program_routing=routing,
+            hard_reject=True,
+            hard_reject_reason=reason,
+            retry_index=retry_index,
+        )
+
+    if not routing.eligible_programs:
+        reason = "No eligible program track (SBA 7(a) / CDFI Direct)"
+        # Thin-file / borderline cases escalate instead of auto-deny.
+        if applicant.metadata.get("borderline"):
+            return SubagentOutput(
+                agent=SubagentName.POLICY,
+                conclusion="Borderline file with no eligible program — escalate",
+                confidence=0.55,
+                reasoning_trace="; ".join(notes + [reason, "borderline=true"]),
+                citations=citations,
+                program_routing=routing,
+                hard_reject=False,
+                retry_index=retry_index,
+            )
+        return SubagentOutput(
+            agent=SubagentName.POLICY,
+            conclusion="Deny — no eligible SBA 7(a) or CDFI Direct track",
+            confidence=0.9,
+            reasoning_trace="; ".join(notes + [reason]),
+            citations=citations,
+            program_routing=routing,
+            hard_reject=True,
+            hard_reject_reason=reason,
+            retry_index=retry_index,
+        )
+
+    program_labels = [
+        ("SBA 7(a)" if p.value == "sba_7a" else "CDFI Direct")
+        for p in routing.eligible_programs
+    ]
+    rec = (
+        routing.recommended_program.value
+        if routing.recommended_program
+        else "unspecified"
+    )
+    rec_label = (
+        "SBA 7(a)"
+        if rec == "sba_7a"
+        else "CDFI Direct"
+        if rec == "cdfi_direct"
+        else rec
+    )
     return SubagentOutput(
         agent=SubagentName.POLICY,
-        conclusion="No hard policy disqualifiers detected (stub)",
-        confidence=0.8,
-        reasoning_trace="; ".join(notes + ["No hard policy disqualifiers detected (stub)"]),
+        conclusion=(
+            f"Eligible for {', '.join(program_labels)}; "
+            f"recommend {rec_label}"
+        ),
+        confidence=0.85 if citations else 0.7,
+        reasoning_trace="; ".join(notes),
         citations=citations,
+        program_routing=routing,
         hard_reject=False,
         retry_index=retry_index,
     )

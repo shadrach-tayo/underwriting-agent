@@ -11,11 +11,17 @@ from http_api.admin import router as admin_rag_router
 from http_api.db import ping_database
 from http_api.rag import router as rag_router
 from http_api.schemas import HealthResponse, ReadyResponse
+from http_api.underwrite import router as underwrite_router
 from version import __version__
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # Ensure LangSmith env is set before any graph invoke from this process.
+    from graph.runtime import configure_langsmith
+
+    configure_langsmith(settings)
+
     application = FastAPI(
         title="Underwriting Decision & Escalation Agent",
         version=__version__,
@@ -33,6 +39,7 @@ def create_app() -> FastAPI:
     )
     application.include_router(admin_rag_router)
     application.include_router(rag_router)
+    application.include_router(underwrite_router)
 
     @application.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

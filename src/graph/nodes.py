@@ -8,14 +8,16 @@ from uuid import uuid4
 from langgraph.types import Send
 
 from agents import (
+    compute_improvement_actions,
     critique_outputs,
+    financial_facts,
+    policy_facts,
     run_financial_subagent,
     run_policy_subagent,
 )
 from config import get_settings
 from graph.audit import last_audit_hash, make_audit_entry
 from graph.state import GraphState
-from subagent_state import SubagentState
 from models import (
     AdverseActionReason,
     CompositeScore,
@@ -23,12 +25,18 @@ from models import (
     Decision,
     DecisionOrigin,
     DecisionOutcome,
+    DecisionRationale,
     EscalationPackage,
     HumanReviewRecord,
+    RationaleFact,
+    RationaleFactTone,
+    RationaleKind,
+    RationaleSection,
     RiskTier,
     SubagentName,
     SubagentOutput,
 )
+from subagent_state import SubagentState
 
 DEFAULT_MAX_RETRIES = 3
 
@@ -159,17 +167,14 @@ def decision_node(state: GraphState) -> GraphState:
     latest_critique = history[-1] if history else None
 
     risk_score = financial.metrics.risk_score if financial and financial.metrics else 1.0
-    risk_tier = (
-        financial.metrics.risk_tier if financial and financial.metrics else RiskTier.HIGH
-    )
+    risk_tier = financial.metrics.risk_tier if financial and financial.metrics else RiskTier.HIGH
     citations = list(policy.citations) if policy else []
     term_mods = (
-        list(financial.metrics.recommended_term_mods)
-        if financial and financial.metrics
-        else []
+        list(financial.metrics.recommended_term_mods) if financial and financial.metrics else []
     )
 
     if policy and policy.hard_reject:
+        reason = policy.hard_reject_reason or policy.conclusion
         decision = Decision(
             outcome=DecisionOutcome.DENY,
             origin=DecisionOrigin.AUTO,
@@ -181,11 +186,16 @@ def decision_node(state: GraphState) -> GraphState:
                 calibration_adjustment=0.0,
                 composite=1.0,
             ),
-            rationale=policy.hard_reject_reason or policy.conclusion,
+            rationale=DecisionRationale.from_text(
+                reason,
+                kind=RationaleKind.HARD_REJECT,
+                title="Hard reject",
+            ),
+            program_routing=policy.program_routing,
             adverse_action_reasons=[
                 AdverseActionReason(
                     reason_code="hard_reject",
-                    description=policy.hard_reject_reason or policy.conclusion,
+                    description=reason,
                     supporting_citations=[c.clause_id for c in citations],
                 )
             ],
@@ -194,6 +204,7 @@ def decision_node(state: GraphState) -> GraphState:
         return _decision_update(state, decision)
 
     if latest_critique and latest_critique.verdict == CritiqueVerdict.ESCALATE:
+        critic_notes = latest_critique.notes or "Critic escalated after unresolved deficiencies"
         decision = Decision(
             outcome=DecisionOutcome.ESCALATE,
             origin=DecisionOrigin.AUTO,
@@ -205,7 +216,39 @@ def decision_node(state: GraphState) -> GraphState:
                 calibration_adjustment=0.0,
                 composite=0.0,
             ),
-            rationale=latest_critique.notes or "Critic escalated after unresolved deficiencies",
+            rationale=DecisionRationale.from_text(
+                critic_notes,
+                kind=RationaleKind.CRITIC,
+                title="Critic escalation",
+            ),
+            program_routing=policy.program_routing if policy else None,
+            citations=citations,
+            term_modifications=term_mods,
+        )
+        return _decision_update(state, decision)
+
+    routing = policy.program_routing if policy else None
+    if routing is not None and not routing.eligible_programs:
+        routing_body = (
+            policy.reasoning_trace if policy else "No eligible program track — escalate for review"
+        )
+        decision = Decision(
+            outcome=DecisionOutcome.ESCALATE,
+            origin=DecisionOrigin.AUTO,
+            risk_tier=risk_tier,
+            ceiling_triggered=False,
+            composite_score=CompositeScore(
+                subagent_agreement=0.4,
+                evidence_coverage=0.4,
+                calibration_adjustment=0.0,
+                composite=0.4,
+            ),
+            rationale=DecisionRationale.from_text(
+                routing_body,
+                kind=RationaleKind.ROUTING,
+                title="Program routing",
+            ),
+            program_routing=routing,
             citations=citations,
             term_modifications=term_mods,
         )
@@ -225,31 +268,122 @@ def decision_node(state: GraphState) -> GraphState:
         composite=composite_value,
     )
 
-    rationale_parts = []
+    sections: list[RationaleSection] = []
     if financial:
-        rationale_parts.append(financial.reasoning_trace)
+        sections.append(
+            RationaleSection(
+                kind=RationaleKind.FINANCIAL,
+                title="Financial analysis",
+                body=financial.conclusion or financial.reasoning_trace,
+                facts=financial_facts(financial.metrics),
+            )
+        )
     if policy:
-        rationale_parts.append(policy.reasoning_trace)
-    if latest_critique:
-        rationale_parts.append(latest_critique.notes)
+        sections.append(
+            RationaleSection(
+                kind=RationaleKind.POLICY,
+                title="Policy compliance",
+                body=policy.conclusion or policy.reasoning_trace,
+                facts=policy_facts(
+                    policy.program_routing,
+                    citation_count=len(policy.citations),
+                ),
+            )
+        )
+    if latest_critique and latest_critique.notes:
+        sections.append(
+            RationaleSection(
+                kind=RationaleKind.CRITIC,
+                title="Critic notes",
+                body=latest_critique.notes,
+                facts=[
+                    RationaleFact(
+                        key="verdict",
+                        label="Verdict",
+                        value=latest_critique.verdict.value,
+                        tone=(
+                            RationaleFactTone.PASS
+                            if latest_critique.verdict == CritiqueVerdict.PASS
+                            else RationaleFactTone.WARN
+                            if latest_critique.verdict == CritiqueVerdict.RETRY
+                            else RationaleFactTone.FAIL
+                        ),
+                    ),
+                    RationaleFact(
+                        key="critic_confidence",
+                        label="Critic confidence",
+                        value=f"{latest_critique.critic_confidence:.0%}",
+                        tone=RationaleFactTone.INFO,
+                    ),
+                ],
+            )
+        )
 
     if composite_value < 0.45 or (
         latest_critique is not None and latest_critique.verdict != CritiqueVerdict.PASS
     ):
         proposed = DecisionOutcome.ESCALATE
-        rationale_parts.append("Below auto-decision envelope → escalate")
+        envelope = "Below auto-decision envelope → escalate"
     elif risk_tier == RiskTier.LOW and composite_value >= 0.55:
         proposed = DecisionOutcome.APPROVE
-        rationale_parts.append("Within auto-approve envelope")
+        envelope = "Within auto-approve envelope"
     else:
         proposed = DecisionOutcome.DENY
-        rationale_parts.append("Outside approve envelope → deny")
+        envelope = "Outside approve envelope → deny"
+
+    sections.append(
+        RationaleSection(
+            kind=RationaleKind.ENVELOPE,
+            title="Decision envelope",
+            body=envelope,
+            facts=[
+                RationaleFact(
+                    key="composite",
+                    label="Composite score",
+                    value=f"{composite_value:.0%}",
+                    tone=(
+                        RationaleFactTone.PASS
+                        if composite_value >= 0.55
+                        else RationaleFactTone.WARN
+                        if composite_value >= 0.45
+                        else RationaleFactTone.FAIL
+                    ),
+                ),
+                RationaleFact(
+                    key="proposed",
+                    label="Proposed outcome",
+                    value=proposed.value,
+                    tone=RationaleFactTone.INFO,
+                ),
+            ],
+        )
+    )
 
     outcome, ceiling_triggered, prohibited = apply_risk_ceiling(risk_score, proposed)
     if prohibited:
         risk_tier = prohibited
     if ceiling_triggered:
-        rationale_parts.append(f"Hard-coded risk ceiling triggered (risk_score={risk_score:.2f})")
+        sections.append(
+            RationaleSection(
+                kind=RationaleKind.ENVELOPE,
+                title="Risk ceiling",
+                body="Hard-coded risk ceiling triggered — human review required",
+                facts=[
+                    RationaleFact(
+                        key="risk_score",
+                        label="Risk score",
+                        value=f"{risk_score:.2f}",
+                        tone=RationaleFactTone.FAIL,
+                    ),
+                    RationaleFact(
+                        key="ceiling",
+                        label="Ceiling",
+                        value="Triggered",
+                        tone=RationaleFactTone.FAIL,
+                    ),
+                ],
+            )
+        )
 
     adverse: list[AdverseActionReason] = []
     if outcome == DecisionOutcome.DENY:
@@ -267,7 +401,8 @@ def decision_node(state: GraphState) -> GraphState:
         risk_tier=risk_tier,
         ceiling_triggered=ceiling_triggered,
         composite_score=score,
-        rationale="; ".join(rationale_parts),
+        rationale=DecisionRationale(summary=envelope, sections=sections),
+        program_routing=policy.program_routing if policy else None,
         adverse_action_reasons=adverse,
         term_modifications=term_mods,
         citations=citations,
@@ -276,6 +411,34 @@ def decision_node(state: GraphState) -> GraphState:
 
 
 def _decision_update(state: GraphState, decision: Decision) -> GraphState:
+    applicant = state.get("applicant")
+    if applicant is not None and not decision.improvement_actions:
+        financial = _financial(state)
+        policy = _policy(state)
+        actions = compute_improvement_actions(
+            applicant,
+            metrics=financial.metrics if financial else None,
+            routing=(
+                decision.program_routing
+                or (policy.program_routing if policy else None)
+            ),
+            outcome=decision.outcome,
+            ceiling_triggered=decision.ceiling_triggered,
+        )
+        term_mods = list(decision.term_modifications)
+        if not term_mods:
+            term_mods = [
+                action.title
+                for action in actions
+                if action.area.value == "structure"
+            ][:3]
+        decision = decision.model_copy(
+            update={
+                "improvement_actions": actions,
+                "term_modifications": term_mods,
+            }
+        )
+
     case_id = state.get("case_id") or "unknown"
     trail = state.get("audit_trail") or []
     entry = make_audit_entry(
@@ -302,7 +465,13 @@ def approve_decline_node(state: GraphState) -> GraphState:
     if decision is None:
         return {}
     updated = decision.model_copy(
-        update={"rationale": f"{decision.rationale}; Auto-decision: {decision.outcome.value}"}
+        update={
+            "rationale": decision.rationale.with_section(
+                kind=RationaleKind.ENVELOPE,
+                title="Auto resolution",
+                body=f"Auto-decision: {decision.outcome.value}",
+            )
+        }
     )
     case_id = state.get("case_id") or "unknown"
     trail = state.get("audit_trail") or []
@@ -331,7 +500,7 @@ def hitl_escalation_node(state: GraphState) -> GraphState:
 
     package = EscalationPackage(
         reason=reason,
-        rationale=decision.rationale if decision else "",
+        rationale=decision.rationale if decision else DecisionRationale(summary=""),
         financial_summary=financial.reasoning_trace if financial else "",
         compliance_summary=policy.reasoning_trace if policy else "",
         citations=list(policy.citations) if policy else [],
@@ -378,14 +547,17 @@ def human_capture_node(state: GraphState) -> GraphState:
             "human_review": review.model_copy(update={"pending": True}),
         }
 
-    origin = (
-        DecisionOrigin.HUMAN_OVERRIDE if review.overrode_ceiling else DecisionOrigin.HUMAN
-    )
+    origin = DecisionOrigin.HUMAN_OVERRIDE if review.overrode_ceiling else DecisionOrigin.HUMAN
     finalized = decision.model_copy(
         update={
             "outcome": review.outcome,
             "origin": origin,
-            "rationale": f"{decision.rationale}; Human: {review.rationale}",
+            "rationale": decision.rationale.with_section(
+                kind=RationaleKind.HUMAN,
+                title="Human review",
+                body=review.rationale,
+                update_summary=True,
+            ),
             "ceiling_triggered": decision.ceiling_triggered and not review.overrode_ceiling,
         }
     )

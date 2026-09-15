@@ -33,7 +33,7 @@ def heuristic_citation_accuracy(pred: Prediction) -> float:
     cite_toks: set[str] = set()
     for c in citations:
         cite_toks |= _tokens(c.retrieved_text) | _tokens(c.clause_id)
-    rationale_toks = _tokens(pred.decision.rationale)
+    rationale_toks = _tokens(pred.decision.rationale.text)
     if not rationale_toks:
         return 0.0
     if not cite_toks:
@@ -70,7 +70,7 @@ def score_citation_accuracy(
     metric = FaithfulnessMetric(threshold=0.95, include_reason=True)
     case = LLMTestCase(
         input="Underwriting decision rationale must be grounded in cited policy.",
-        actual_output=pred.decision.rationale,
+        actual_output=pred.decision.rationale.text,
         retrieval_context=contexts,
     )
     metric.measure(case)

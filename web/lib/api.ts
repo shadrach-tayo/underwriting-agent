@@ -36,15 +36,61 @@ export function formatApiError(status: number, body: string): string {
   return unwrapProviderMessage(trimmed)
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  credit_score_proxy: "FICO proxy",
+  sbss_proxy: "SBSS proxy",
+  debt_service_coverage_ratio: "DSCR",
+  annual_revenue: "Revenue",
+  requested_loan_amount: "Loan amount",
+  years_in_business: "Years in business",
+  business_name: "Business name",
+  industry: "Industry",
+  requested_program: "Program",
+  has_bankruptcy: "Bankruptcy",
+  has_severe_fraud_alert: "Severe fraud alert",
+  notes: "Notes",
+}
+
+function fieldLabel(loc: unknown): string | null {
+  if (!Array.isArray(loc) || loc.length === 0) return null
+  const leaf = loc[loc.length - 1]
+  if (typeof leaf !== "string" || !leaf) return null
+  return FIELD_LABELS[leaf] ?? leaf.replaceAll("_", " ")
+}
+
+function formatValidationIssue(issue: unknown): string | null {
+  if (!issue || typeof issue !== "object") return null
+  const msg =
+    typeof (issue as { msg?: unknown }).msg === "string"
+      ? (issue as { msg: string }).msg.trim()
+      : typeof (issue as { message?: unknown }).message === "string"
+        ? (issue as { message: string }).message.trim()
+        : ""
+  if (!msg) return null
+  const label = fieldLabel((issue as { loc?: unknown }).loc)
+  return label ? `${label}: ${msg}` : msg
+}
+
 function extractDetail(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null
   const detail = (payload as { detail?: unknown }).detail
+
+  // FastAPI / Pydantic 422: {"detail":[{"loc":[...],"msg":"..."}, ...]}
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map(formatValidationIssue)
+      .filter((part): part is string => Boolean(part))
+    if (parts.length > 0) return parts.join("; ")
+  }
+
   if (typeof detail === "string" && detail.trim()) return detail.trim()
   if (detail && typeof detail === "object") {
     const nested = extractDetail(detail)
     if (nested) return nested
     const msg = (detail as { message?: unknown }).message
     if (typeof msg === "string" && msg.trim()) return msg.trim()
+    const single = formatValidationIssue(detail)
+    if (single) return single
   }
   const message = (payload as { message?: unknown }).message
   if (typeof message === "string" && message.trim()) return message.trim()

@@ -3,24 +3,24 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
-export type UnderwriteForm = {
-  business_name: string
-  industry: string
-  annual_revenue: string
-  requested_loan_amount: string
-  years_in_business: string
-  notes: string
-}
+import {
+  buildUnderwritePayload,
+  type UnderwriteForm,
+  type UnderwriteRequestParams,
+} from "@/lib/underwrite"
 
 type UnderwriteState = {
   form: UnderwriteForm
-  submitted: UnderwriteForm | null
+  /** Last submitted run — drives TanStack Query + survives navigation. */
+  activeRun: UnderwriteRequestParams | null
+  formOpen: boolean
   updateField: <K extends keyof UnderwriteForm>(
     key: K,
     value: UnderwriteForm[K]
   ) => void
-  submitStub: () => void
-  clearSubmitted: () => void
+  setFormOpen: (open: boolean) => void
+  commitRun: () => UnderwriteRequestParams | null
+  clearResults: () => void
 }
 
 const initialForm: UnderwriteForm = {
@@ -29,6 +29,12 @@ const initialForm: UnderwriteForm = {
   annual_revenue: "180000",
   requested_loan_amount: "75000",
   years_in_business: "3",
+  debt_service_coverage_ratio: "1.35",
+  credit_score_proxy: "690",
+  sbss_proxy: "175",
+  requested_program: "sba_7a",
+  has_bankruptcy: false,
+  has_severe_fraud_alert: false,
   notes: "Synthetic applicant for dual-program routing demos.",
 }
 
@@ -36,21 +42,32 @@ export const useUnderwriteStore = create<UnderwriteState>()(
   persist(
     (set, get) => ({
       form: initialForm,
-      submitted: null,
+      activeRun: null,
+      formOpen: true,
       updateField: (key, value) =>
         set((state) => ({
           form: { ...state.form, [key]: value },
         })),
-      submitStub: () => set({ submitted: { ...get().form } }),
-      clearSubmitted: () => set({ submitted: null }),
+      setFormOpen: (formOpen) => set({ formOpen }),
+      commitRun: () => {
+        try {
+          const activeRun = buildUnderwritePayload(get().form)
+          set({ activeRun })
+          return activeRun
+        } catch {
+          return null
+        }
+      },
+      clearResults: () => set({ activeRun: null, formOpen: true }),
     }),
     {
-      name: "underwriting.playground.underwrite",
+      name: "underwriting.playground.underwrite.v3",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({
         form: state.form,
-        submitted: state.submitted,
+        activeRun: state.activeRun,
+        formOpen: state.formOpen,
       }),
     }
   )

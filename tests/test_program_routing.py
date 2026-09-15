@@ -1,0 +1,43 @@
+"""Program routing unit tests (no RAG / graph required)."""
+
+from __future__ import annotations
+
+from agents.program_routing import compute_program_routing
+from models import Applicant, LoanProgram
+
+
+def _applicant(**kwargs) -> Applicant:
+    base = dict(
+        applicant_id="A-1",
+        business_name="Test Co",
+        industry="manufacturing",
+        annual_revenue=500_000,
+        requested_loan_amount=100_000,
+        years_in_business=5,
+        debt_service_coverage_ratio=1.4,
+        credit_score_proxy=700,
+        sbss_proxy=180,
+    )
+    base.update(kwargs)
+    return Applicant(**base)
+
+
+def test_both_programs_eligible() -> None:
+    routing = compute_program_routing(_applicant(requested_program=LoanProgram.SBA_7A))
+    assert set(routing.eligible_programs) == {
+        LoanProgram.SBA_7A,
+        LoanProgram.CDFI_DIRECT,
+    }
+    assert routing.recommended_program == LoanProgram.SBA_7A
+
+
+def test_bankruptcy_hard_gate() -> None:
+    routing = compute_program_routing(_applicant(has_bankruptcy=True))
+    assert routing.eligible_programs == []
+    assert routing.eligibility_gate_pass is False
+
+
+def test_ineligible_industry() -> None:
+    routing = compute_program_routing(_applicant(industry="gambling"))
+    assert routing.eligible_programs == []
+    assert routing.eligibility_gate_pass is False

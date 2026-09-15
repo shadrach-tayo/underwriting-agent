@@ -9,6 +9,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import { Markdown } from "@/components/markdown"
+import { SourceLink } from "@/components/playground/source-link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -329,9 +330,12 @@ function ResultsSection({
                           >
                             {hit.score.toFixed(3)}
                           </Badge>
-                          <span className="truncate font-mono text-[11px] text-muted-foreground">
-                            {sourceLabel(hit.source)}
-                          </span>
+                          <SourceLink
+                            href={hit.url}
+                            className="truncate font-mono text-[11px]"
+                          >
+                            {hit.title || sourceLabel(hit.source)}
+                          </SourceLink>
                         </span>
                         <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                           {snippet(hit.text)}
@@ -426,9 +430,12 @@ function ResultsSection({
                             </Badge>
                           ) : null}
                         </span>
-                        <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                          {hit.source}
-                        </span>
+                        <SourceLink
+                          href={hit.url}
+                          className="block truncate font-mono text-[11px]"
+                        >
+                          {hit.title || hit.source}
+                        </SourceLink>
                         {!open ? (
                           <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                             {snippet(hit.text, 180)}

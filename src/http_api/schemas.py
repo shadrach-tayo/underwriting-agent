@@ -7,6 +7,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from models import (
+    Citation,
+    Decision,
+    EscalationPackage,
+    ProgramRouting,
+    SubagentOutput,
+)
+
 IngestTargetName = Literal["vector", "hybrid"]
 
 
@@ -91,6 +99,8 @@ class RagHit(BaseModel):
     program: str
     source: str
     authority: str
+    url: str | None = None
+    title: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
@@ -111,3 +121,38 @@ class RagAskResponse(BaseModel):
     program_filter: str | None = None
     hits: list[RagHit]
     answer: str
+
+
+class UnderwriteApplicantRequest(BaseModel):
+    """Synthetic / non-PII applicant payload for ``POST /underwrite``."""
+
+    applicant_id: str | None = None
+    business_name: str = Field(min_length=1, max_length=200)
+    industry: str = Field(min_length=1, max_length=120)
+    annual_revenue: float = Field(ge=0)
+    requested_loan_amount: float = Field(gt=0)
+    years_in_business: float = Field(ge=0)
+    debt_service_coverage_ratio: float | None = None
+    credit_score_proxy: int | None = Field(default=None, ge=300, le=850)
+    sbss_proxy: int | None = Field(default=None, ge=0, le=300)
+    has_bankruptcy: bool = False
+    has_severe_fraud_alert: bool = False
+    requested_program: Literal["sba_7a", "cdfi_direct"] | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class UnderwriteRequest(BaseModel):
+    applicant: UnderwriteApplicantRequest
+    case_id: str | None = Field(default=None, max_length=120)
+    max_retries: int = Field(default=3, ge=0, le=5)
+
+
+class UnderwriteResponse(BaseModel):
+    case_id: str
+    decision: Decision
+    program_routing: ProgramRouting | None = None
+    citations: list[Citation] = Field(default_factory=list)
+    subagent_outputs: dict[str, SubagentOutput] = Field(default_factory=dict)
+    escalation: EscalationPackage | None = None
+    latency_ms: float | None = None

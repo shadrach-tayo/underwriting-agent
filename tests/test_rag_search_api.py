@@ -12,12 +12,14 @@ from models import Citation, PolicyLayer, PolicySource
 from rag.pipeline import RetrievalResult
 
 
-def _cite(text: str, program: PolicyLayer) -> Citation:
+def _cite(text: str, program: PolicyLayer, *, url: str | None = "https://example.com/policy") -> Citation:
     return Citation(
         clause_id=f"c-{program.value}",
         source=PolicySource(
             source_id="test",
             name="test-source.pdf",
+            title="Test source",
+            url=url,
             authority="sba",
             version="1",
             effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
@@ -59,6 +61,8 @@ def test_rag_search_returns_hits() -> None:
     assert body["answer"] is None
     assert len(body["hits"]) == 1
     assert body["hits"][0]["program"] == "sba_7a"
+    assert body["hits"][0]["url"] == "https://example.com/policy"
+    assert body["hits"][0]["title"] == "Test source"
     assert "165" in body["hits"][0]["text"]
     pipeline.generate.assert_not_called()
 

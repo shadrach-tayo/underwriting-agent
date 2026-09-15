@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -69,26 +69,18 @@ def predict_oracle(case: GoldCase) -> Prediction:
 
 def predict_graph(case: GoldCase) -> Prediction:
     """Invoke the compiled LangGraph agent on one gold applicant."""
-    from graph import graph
+    from graph.runtime import decision_from_state, run_underwrite
 
     t0 = time.perf_counter()
     with span("eval.graph_invoke", span_attributes={"type": "task"}) as current:
         if current is not None:
             current.log(input={"case_id": case.case_id})
-        result: dict[str, Any] = graph.invoke(
-            {
-                "case_id": case.case_id,
-                "applicant": case.applicant,
-                "retry_count": 0,
-                "max_retries": 3,
-            }
+        result: dict[str, Any] = run_underwrite(
+            case.applicant,
+            case_id=case.case_id,
         )
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        decision = result.get("decision")
-        if decision is None:
-            raise RuntimeError(f"Graph returned no decision for {case.case_id}")
-        if not isinstance(decision, Decision):
-            decision = Decision.model_validate(decision)
+        decision = decision_from_state(result)
 
         retrieved: list[str] = []
         outputs = result.get("subagent_outputs") or {}

@@ -5,14 +5,7 @@ from __future__ import annotations
 import re
 
 from models import PolicyLayer
-
-# Filename → default layer when content heuristics do not override.
-SOURCE_PROGRAM: dict[str, PolicyLayer] = {
-    "12 CFR Part 202 (up to date as of 9-10-2026).pdf": PolicyLayer.COMPLIANCE_FLOOR,
-    "Equal Credit Opportunity Act (Regulation B) _ NCUA.pdf": PolicyLayer.COMPLIANCE_FLOOR,
-    "SOP 50 10 8.1 effective 10.1.2026_0.docx": PolicyLayer.SBA_7A,
-    "cdfi_direct_accion_criteria.md": PolicyLayer.CDFI_DIRECT,
-}
+from policy_rag.catalog import program_for_file
 
 # SBA SOP passages that encode the shared categorical eligibility gate.
 _ELIGIBILITY_GATE_PATTERNS = (
@@ -27,7 +20,7 @@ _ELIGIBILITY_GATE_PATTERNS = (
 
 def resolve_program(source_name: str, text: str = "") -> PolicyLayer:
     """Map a source (+ optional body text) to its policy layer tag."""
-    default = SOURCE_PROGRAM.get(source_name)
+    default = program_for_file(source_name)
     if default is None:
         lower = source_name.lower()
         if "cfr" in lower or "regulation b" in lower or "ecoa" in lower or "ncua" in lower:

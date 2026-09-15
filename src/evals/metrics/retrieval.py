@@ -68,7 +68,7 @@ def heuristic_faithfulness(pred: Prediction) -> float | None:
     contexts.extend(c.retrieved_text for c in pred.decision.citations if c.retrieved_text)
     if not contexts:
         return None
-    rationale = pred.decision.rationale or ""
+    rationale = pred.decision.rationale.text or ""
     rat_toks = _tokens(rationale)
     if not rat_toks:
         return None
@@ -89,7 +89,7 @@ def _deepeval_rag_scores(pred: Prediction) -> dict[str, float | None]:
     from deepeval.test_case import LLMTestCase, RetrievedContextData
 
     question = f"Underwrite applicant {pred.case_id}: outcome={pred.decision.outcome.value}"
-    expected = " ".join(pred.reference_contexts) or pred.decision.rationale
+    expected = " ".join(pred.reference_contexts) or pred.decision.rationale.text
     # list is invariant: list[str] is not a list[str | RetrievedContextData].
     raw_contexts = pred.retrieved_contexts or [
         c.retrieved_text for c in pred.decision.citations
@@ -99,7 +99,7 @@ def _deepeval_rag_scores(pred: Prediction) -> dict[str, float | None]:
     ]
     case = LLMTestCase(
         input=question,
-        actual_output=pred.decision.rationale,
+        actual_output=pred.decision.rationale.text,
         expected_output=expected,
         retrieval_context=retrieval_context,
         context=pred.reference_contexts or None,

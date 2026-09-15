@@ -21,7 +21,11 @@ __all__ = [
     "SubagentState",
     "apply_risk_ceiling",
     "build_graph",
+    "configure_langsmith",
+    "decision_from_state",
+    "get_compiled_graph",
     "graph",
+    "run_underwrite",
 ]
 
 
@@ -64,4 +68,12 @@ def build_graph():
     return builder.compile()
 
 
+from graph.runtime import (  # noqa: E402
+    configure_langsmith,
+    decision_from_state,
+    get_compiled_graph,
+    run_underwrite,
+)
+
+configure_langsmith()
 graph = build_graph()

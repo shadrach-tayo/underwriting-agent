@@ -10,6 +10,7 @@ from rag.pipeline import RagConfig, RagPipeline, RetrievalResult
 
 from config import get_settings
 from models import Citation, PolicyLayer, PolicySource
+from policy_rag.catalog import lookup_source
 
 Authority = Literal["regulatory", "sba", "lender"]
 
@@ -96,22 +97,36 @@ def citations_from_retrieval(result: RetrievalResult) -> list[Citation]:
     for i, meta in enumerate(result.metadata):
         text = result.docs[i] if i < len(result.docs) else ""
         source_name = str(meta.get("source") or meta.get("file") or "unknown")
+        entry = lookup_source(source_name)
         clause_id = str(meta.get("clause_id") or f"{source_name}:p{meta.get('page', i)}")
         score = float(meta.get("score") or meta.get("similarity") or 0.0)
         similarity = max(0.0, min(1.0, score if 0.0 <= score <= 1.0 else 1.0 / (1.0 + abs(score))))
-        effective = meta.get("effective_date")
-        if not isinstance(effective, datetime):
-            effective = _DEFAULT_EFFECTIVE
         program = _coerce_program(meta.get("program"), source_name)
+        raw_authority = meta.get("authority")
+        if raw_authority in ("regulatory", "sba", "lender"):
+            authority: Authority = raw_authority
+        elif entry is not None:
+            authority = entry.authority
+        else:
+            authority = _guess_authority(source_name, program)
         citations.append(
             Citation(
                 clause_id=clause_id,
                 source=PolicySource(
                     source_id=source_name,
                     name=source_name,
-                    authority=_guess_authority(source_name, program),
-                    version=str(meta.get("version") or "unknown"),
-                    effective_date=effective,
+                    title=_optional_str(meta.get("title")) or (entry.title if entry else None),
+                    url=_optional_http_url(meta.get("url")) or (entry.url if entry else None),
+                    authority=authority,
+                    version=str(
+                        meta.get("version")
+                        or (entry.version if entry is not None else None)
+                        or "unknown"
+                    ),
+                    effective_date=_coerce_effective(
+                        meta.get("effective_date"),
+                        fallback=(entry.effective_date if entry is not None else None),
+                    ),
                     program=program,
                 ),
                 retrieved_text=text,
@@ -148,3 +163,38 @@ def _guess_authority(source_name: str, program: PolicyLayer) -> Authority:
     if "sop" in lower or "sba" in lower:
         return "sba"
     return "lender"
+
+
+def _optional_str(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _optional_http_url(value: object) -> str | None:
+    url = _optional_str(value)
+    if url is None:
+        return None
+    if url.startswith(("http://", "https://")):
+        return url
+    return None
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    text = _optional_str(value)
+    if text is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _coerce_effective(meta_value: object, *, fallback: str | None) -> datetime:
+    return _parse_datetime(meta_value) or _parse_datetime(fallback) or _DEFAULT_EFFECTIVE
