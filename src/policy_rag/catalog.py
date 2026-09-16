@@ -1,9 +1,10 @@
 """Filename → origin catalog for policy documents used in the RAG pipeline.
 
 ``data/policy_sources/catalog.json`` is the source of truth for display title,
-download/origin URL, authority, and default program layer. Edit URLs there;
-ingest stamps them onto chunk metadata and citation mapping falls back to this
-file when older index rows omit ``url``.
+download/origin URL, authority, default program layer, and optional lender
+overlay (``lender_id``). Edit URLs there; ingest stamps them onto chunk
+metadata and citation mapping falls back to this file when older index rows
+omit ``url`` / ``lender_id``.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ class SourceCatalogEntry:
     url: str | None
     authority: Authority
     program: PolicyLayer
+    lender_id: str | None = None
     version: str | None = None
     effective_date: str | None = None
     notes: str | None = None
@@ -99,6 +101,7 @@ def _parse_entry(raw: dict[str, object], path: Path) -> SourceCatalogEntry:
         url=_normalize_url(raw.get("url")),
         authority=authority_raw,  # type: ignore[arg-type]
         program=program,
+        lender_id=_optional_str(raw.get("lender_id")),
         version=_optional_str(raw.get("version")),
         effective_date=_optional_str(raw.get("effective_date")),
         notes=_optional_str(raw.get("notes")),

@@ -65,7 +65,7 @@ class PolicyLayer(StrEnum):
 
 
 class LoanProgram(StrEnum):
-    """Originate-able products at the fictional dual-program CDFI lender."""
+    """Originate-able product types (not lender-specific overlays)."""
 
     SBA_7A = "sba_7a"
     CDFI_DIRECT = "cdfi_direct"
@@ -93,6 +93,8 @@ class Applicant(BaseModel):
     has_severe_fraud_alert: bool = False
     # Preferred product if stated; agent may still recommend the other track.
     requested_program: LoanProgram | None = None
+    # Optional lender overlay for RAG + offer-matrix routing (e.g. accion).
+    lender_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -106,6 +108,8 @@ class PolicySource(BaseModel):
     effective_date: datetime
     # Layer tag mirrored from chunk metadata ``program``.
     program: PolicyLayer = PolicyLayer.COMPLIANCE_FLOOR
+    # Lender overlay from chunk metadata / catalog (null = shared / generic).
+    lender_id: str | None = None
     # Catalog display title (falls back to ``name`` / filename in the UI).
     title: str | None = None
     # Origin / download URL from ``data/policy_sources/catalog.json``.

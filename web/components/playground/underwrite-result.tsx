@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   formatCurrency,
+  formatLender,
   formatProgram,
   normalizeRationale,
   outcomeTone,
@@ -382,6 +383,7 @@ export function UnderwriteResultView({
   const metaBits = [
     applicant.industry,
     formatProgram(applicant.requested_program),
+    formatLender(applicant.lender_id),
     `${applicant.years_in_business} yrs`,
   ]
     .filter(Boolean)

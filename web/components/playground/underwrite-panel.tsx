@@ -289,6 +289,33 @@ export function UnderwritePanel() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lender_id">Lender</Label>
+                    <Select
+                      value={form.lender_id || "none"}
+                      disabled={locked}
+                      onValueChange={(value) => {
+                        if (value == null) return
+                        updateField(
+                          "lender_id",
+                          value === "none"
+                            ? ""
+                            : (value as "accion" | "frontier_7a")
+                        )
+                      }}
+                    >
+                      <SelectTrigger id="lender_id" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None (generic)</SelectItem>
+                        <SelectItem value="accion">Accion</SelectItem>
+                        <SelectItem value="frontier_7a">
+                          Frontier 7(a)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-6">

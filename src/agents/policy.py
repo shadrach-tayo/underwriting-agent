@@ -30,6 +30,8 @@ def _policy_query(applicant: Applicant) -> str:
         parts.append(f"credit score {applicant.credit_score_proxy}")
     if applicant.requested_program is not None:
         parts.append(f"requested program {applicant.requested_program.value}")
+    if applicant.lender_id:
+        parts.append(f"lender {applicant.lender_id}")
     return ". ".join(parts)
 
 
@@ -38,10 +40,23 @@ def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -
         return list(reuse)
     try:
         from policy_rag import citations_from_retrieval, get_policy_pipeline
+        from policy_rag.filters import ensure_regulatory_citations, filter_citations
 
-        pipeline = get_policy_pipeline()
-        result = pipeline.retrieve(_policy_query(applicant))
-        return citations_from_retrieval(result)
+        program = (
+            applicant.requested_program.value if applicant.requested_program else None
+        )
+        lender_id = applicant.lender_id
+        fetch_k = 12 if (program or lender_id) else 5
+        pipeline = get_policy_pipeline(top_k=fetch_k)
+        result = pipeline.retrieve(_policy_query(applicant), top_k=fetch_k)
+        pool = citations_from_retrieval(result)
+        scoped = filter_citations(
+            pool,
+            program=program,
+            lender_id=lender_id,
+            include_shared_layers=True,
+        )
+        return ensure_regulatory_citations(scoped, pool)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Policy RAG retrieve failed (%s); continuing without citations", exc)
         return []
@@ -67,12 +82,27 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
         f"eligible={','.join(p.value for p in routing.eligible_programs) or 'none'}",
         f"citations={len(citations)}",
     ]
+    if applicant.lender_id:
+        notes.append(f"lender={applicant.lender_id}")
     if routing.recommended_program:
         notes.append(f"recommended={routing.recommended_program.value}")
     if feedback and feedback.notes:
         notes.append(f"critic_feedback: {feedback.notes}")
     if reuse:
         notes.append("reuse_evidence=true (re-reason pass)")
+
+    mismatch = routing.ineligible_reasons.get("lender_program_mismatch")
+    if mismatch:
+        return SubagentOutput(
+            agent=SubagentName.POLICY,
+            conclusion=f"Escalate — {mismatch}",
+            confidence=0.95,
+            reasoning_trace="; ".join(notes + [mismatch]),
+            citations=citations,
+            program_routing=routing,
+            hard_reject=False,
+            retry_index=retry_index,
+        )
 
     if applicant.has_bankruptcy:
         return SubagentOutput(

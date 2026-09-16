@@ -131,3 +131,102 @@ def test_rag_ask_forces_answer() -> None:
     assert res.status_code == 200
     assert res.json()["answer"]
     pipeline.generate.assert_called_once()
+
+
+def test_rag_search_generic_lender_excludes_accion_overlay() -> None:
+    shared = _cite("Shared SBA rule.", PolicyLayer.SBA_7A)
+    accion = Citation(
+        clause_id="c-accion",
+        source=PolicySource(
+            source_id="accion",
+            name="accion.md",
+            title="Accion criteria",
+            url=None,
+            authority="lender",
+            version="1",
+            effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            program=PolicyLayer.CDFI_DIRECT,
+            lender_id="accion",
+        ),
+        retrieved_text="Accion revenue floor $50k.",
+        similarity_score=0.9,
+        program=PolicyLayer.CDFI_DIRECT,
+    )
+    result = RetrievalResult(
+        docs=[shared.retrieved_text, accion.retrieved_text],
+        metadata=[{}, {}],
+        strategy="vector",
+        es_hits=[],
+        rerank=[],
+    )
+    pipeline = MagicMock()
+    pipeline.retrieve.return_value = result
+
+    with (
+        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch(
+            "http_api.rag.citations_from_retrieval",
+            return_value=[shared, accion],
+        ),
+    ):
+        client = TestClient(create_app())
+        res = client.post(
+            "/rag/search",
+            json={"query": "loan criteria", "top_k": 5, "lender_id": None},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["lender_filter"] is None
+    assert [h["clause_id"] for h in body["hits"]] == ["c-sba_7a"]
+
+
+def test_rag_search_accion_includes_overlay() -> None:
+    shared = _cite("Shared compliance.", PolicyLayer.COMPLIANCE_FLOOR)
+    shared.source.authority = "regulatory"
+    accion = Citation(
+        clause_id="c-accion",
+        source=PolicySource(
+            source_id="accion",
+            name="accion.md",
+            title="Accion criteria",
+            url=None,
+            authority="lender",
+            version="1",
+            effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            program=PolicyLayer.CDFI_DIRECT,
+            lender_id="accion",
+        ),
+        retrieved_text="Accion revenue floor $50k.",
+        similarity_score=0.9,
+        program=PolicyLayer.CDFI_DIRECT,
+    )
+    result = RetrievalResult(
+        docs=[shared.retrieved_text, accion.retrieved_text],
+        metadata=[{}, {}],
+        strategy="vector",
+        es_hits=[],
+        rerank=[],
+    )
+    pipeline = MagicMock()
+    pipeline.retrieve.return_value = result
+
+    with (
+        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch(
+            "http_api.rag.citations_from_retrieval",
+            return_value=[shared, accion],
+        ),
+    ):
+        client = TestClient(create_app())
+        res = client.post(
+            "/rag/search",
+            json={"query": "CDFI criteria", "top_k": 5, "lender_id": "accion"},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["lender_filter"] == "accion"
+    ids = {h["clause_id"] for h in body["hits"]}
+    assert ids == {"c-compliance_floor", "c-accion"}
+    assert any(h.get("lender_id") == "accion" for h in body["hits"])

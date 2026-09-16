@@ -46,6 +46,7 @@ const FIELD_LABELS: Record<string, string> = {
   business_name: "Business name",
   industry: "Industry",
   requested_program: "Program",
+  lender_id: "Lender",
   has_bankruptcy: "Bankruptcy",
   has_severe_fraud_alert: "Severe fraud alert",
   notes: "Notes",

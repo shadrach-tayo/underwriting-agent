@@ -53,7 +53,7 @@ def test_admin_ingest_dry_run() -> None:
         ),
         patch(
             "http_api.admin.list_policy_source_files",
-            return_value=["cdfi_direct_accion_criteria.md"],
+            return_value=["policy_accion_sba_7a.pdf"],
         ),
     ):
         res = client.post("/admin/rag/ingest", json={"dry_run": True})

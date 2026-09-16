@@ -1,7 +1,9 @@
 import { apiBase, jsonHeaders, readApiError } from "@/lib/api"
 
 export type UnderwriteProgram = "" | "sba_7a" | "cdfi_direct"
+export type UnderwriteLender = "" | "accion" | "frontier_7a"
 export type LoanProgram = "sba_7a" | "cdfi_direct"
+export type LenderId = "accion" | "frontier_7a"
 export type DecisionOutcome = "approve" | "deny" | "escalate"
 export type RiskTier = "low" | "medium" | "high" | "prohibited"
 export type RationaleKind =
@@ -24,6 +26,7 @@ export type UnderwriteForm = {
   credit_score_proxy: string
   sbss_proxy: string
   requested_program: UnderwriteProgram
+  lender_id: UnderwriteLender
   has_bankruptcy: boolean
   has_severe_fraud_alert: boolean
   notes: string
@@ -41,6 +44,7 @@ export type UnderwriteApplicantPayload = {
   has_bankruptcy: boolean
   has_severe_fraud_alert: boolean
   requested_program: LoanProgram | null
+  lender_id: LenderId | null
   notes: string | null
 }
 
@@ -92,6 +96,7 @@ export type PolicySource = {
   program: string
   title?: string | null
   url?: string | null
+  lender_id?: string | null
 }
 
 export type Citation = {
@@ -230,6 +235,7 @@ export function buildUnderwritePayload(
       has_bankruptcy: form.has_bankruptcy,
       has_severe_fraud_alert: form.has_severe_fraud_alert,
       requested_program: form.requested_program || null,
+      lender_id: form.lender_id || null,
       notes: form.notes.trim() || null,
     },
   }
@@ -264,6 +270,13 @@ export function formatProgram(value: string | null | undefined) {
   if (value === "cdfi_direct") return "CDFI Direct"
   if (value === "compliance_floor") return "Compliance floor"
   if (value === "eligibility_gate") return "Eligibility gate"
+  return value.replaceAll("_", " ")
+}
+
+export function formatLender(value: string | null | undefined) {
+  if (!value) return "—"
+  if (value === "accion") return "Accion"
+  if (value === "frontier_7a") return "Frontier 7(a)"
   return value.replaceAll("_", " ")
 }
 

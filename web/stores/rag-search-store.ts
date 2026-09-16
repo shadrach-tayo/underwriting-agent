@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware"
 
 import {
   hitKey,
+  type LenderFilter,
   type ProgramLayer,
   type RagHit,
   type RagSearchParams,
@@ -13,6 +14,7 @@ import {
 type RagSearchState = {
   query: string
   program: ProgramLayer
+  lender: LenderFilter
   withAnswer: boolean
   topK: number
   /** Last submitted search — drives TanStack Query + survives navigation. */
@@ -20,6 +22,7 @@ type RagSearchState = {
   openHits: Record<string, boolean>
   setQuery: (query: string) => void
   setProgram: (program: ProgramLayer) => void
+  setLender: (lender: LenderFilter) => void
   setWithAnswer: (withAnswer: boolean) => void
   setTopK: (topK: number) => void
   commitSearch: () => RagSearchParams | null
@@ -39,21 +42,24 @@ export const useRagSearchStore = create<RagSearchState>()(
     (set, get) => ({
       query: defaultQuery,
       program: "all",
+      lender: "generic",
       withAnswer: false,
       topK: 5,
       activeSearch: null,
       openHits: {},
       setQuery: (query) => set({ query }),
       setProgram: (program) => set({ program }),
+      setLender: (lender) => set({ lender }),
       setWithAnswer: (withAnswer) => set({ withAnswer }),
       setTopK: (topK) => set({ topK }),
       commitSearch: () => {
-        const { query, program, withAnswer, topK } = get()
+        const { query, program, lender, withAnswer, topK } = get()
         const trimmed = query.trim()
         if (!trimmed) return null
         const activeSearch: RagSearchParams = {
           query: trimmed,
           program,
+          lender,
           withAnswer,
           topK,
         }
@@ -83,12 +89,13 @@ export const useRagSearchStore = create<RagSearchState>()(
       collapseAllHits: () => set({ openHits: {} }),
     }),
     {
-      name: "underwriting.playground.rag",
+      name: "underwriting.playground.rag.v2",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({
         query: state.query,
         program: state.program,
+        lender: state.lender,
         withAnswer: state.withAnswer,
         topK: state.topK,
         activeSearch: state.activeSearch,

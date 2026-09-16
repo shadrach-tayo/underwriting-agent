@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
+from agents.lenders import is_known_lender
 from config import Settings
 from evals.tracing import span
 from http_api.deps import SettingsDep
@@ -19,6 +20,7 @@ from http_api.schemas import (
 )
 from models import PolicyLayer
 from policy_rag import citations_from_retrieval, get_policy_pipeline
+from policy_rag.filters import ensure_regulatory_citations, filter_citations
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +29,12 @@ router = APIRouter(prefix="/rag", tags=["rag"])
 _VALID_PROGRAMS = {p.value for p in PolicyLayer}
 
 
-def _hits_from_result(result: Any, *, program: str | None) -> list[RagHit]:
-    citations = citations_from_retrieval(result)
+def _hits_from_citations(citations: list[Any]) -> list[RagHit]:
     hits: list[RagHit] = []
     for cite in citations:
-        if program and cite.program.value != program:
-            continue
+        meta = {"version": cite.source.version}
+        if cite.source.lender_id:
+            meta["lender_id"] = cite.source.lender_id
         hits.append(
             RagHit(
                 clause_id=cite.clause_id,
@@ -43,9 +45,8 @@ def _hits_from_result(result: Any, *, program: str | None) -> list[RagHit]:
                 authority=cite.source.authority,
                 url=cite.source.url,
                 title=cite.source.title,
-                metadata={
-                    "version": cite.source.version,
-                },
+                lender_id=cite.source.lender_id,
+                metadata=meta,
             )
         )
     return hits
@@ -69,6 +70,11 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unknown program layer: {body.program}",
         )
+    if body.lender_id is not None and not is_known_lender(body.lender_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown lender_id: {body.lender_id}",
+        )
 
     with span("http.rag.search") as current:
         if current is not None:
@@ -77,12 +83,14 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
                     "query": query,
                     "top_k": body.top_k,
                     "program": body.program,
+                    "lender_id": body.lender_id,
+                    "exact_program": body.exact_program,
                     "with_answer": body.with_answer,
                 }
             )
 
-        # Over-fetch when filtering by program so we still return up to top_k hits.
-        fetch_k = body.top_k * 3 if body.program else body.top_k
+        filtering = body.program is not None or body.lender_id is not None
+        fetch_k = body.top_k * 4 if filtering else body.top_k
         pipeline = get_policy_pipeline(top_k=fetch_k)
         try:
             result = pipeline.retrieve(query, top_k=fetch_k)
@@ -93,7 +101,19 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
                 detail=extract_error_message(exc),
             ) from exc
 
-        hits = _hits_from_result(result, program=body.program)[: body.top_k]
+        pool = citations_from_retrieval(result)
+        # Playground layer debugger: exact_program keeps strict equality.
+        include_shared = not body.exact_program
+        scoped = filter_citations(
+            pool,
+            program=body.program,
+            lender_id=body.lender_id,
+            include_shared_layers=include_shared,
+        )
+        # Always try to keep regulatory evidence when not debugging a single layer.
+        if not body.exact_program or body.program in (None, "compliance_floor"):
+            scoped = ensure_regulatory_citations(scoped, pool)
+        hits = _hits_from_citations(scoped)[: body.top_k]
         answer: str | None = None
         if body.with_answer:
             if not (settings.deepseek_api_key or "").strip():
@@ -119,6 +139,7 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
             index_name=settings.rag_index_name,
             strategy=settings.rag_strategy,
             program_filter=body.program,
+            lender_filter=body.lender_id,
             with_answer=body.with_answer,
             hits=hits,
             answer=answer,
@@ -144,6 +165,7 @@ def rag_ask(body: RagSearchRequest, settings: SettingsDep) -> RagAskResponse:
         index_name=search.index_name,
         strategy=search.strategy,
         program_filter=search.program_filter,
+        lender_filter=search.lender_filter,
         hits=search.hits,
         answer=search.answer or "",
     )

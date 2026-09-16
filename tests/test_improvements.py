@@ -92,3 +92,31 @@ def test_low_sbss_suggests_credit_and_cdfi_path() -> None:
     areas = {a.area.value for a in actions}
     assert "credit" in areas or "program" in areas
     assert any("SBSS" in (a.target or "") or "CDFI" in a.title for a in actions)
+
+
+def test_mismatch_suggests_align_lender_and_program() -> None:
+    from agents.lenders import LENDER_ACCION, reload_lenders
+    from models import LoanProgram
+
+    reload_lenders()
+    applicant = Applicant(
+        applicant_id="A-m",
+        business_name="Mismatch Co",
+        industry="retail trade",
+        annual_revenue=200_000,
+        requested_loan_amount=150_000,
+        years_in_business=3,
+        credit_score_proxy=700,
+        sbss_proxy=180,
+        debt_service_coverage_ratio=1.4,
+        requested_program=LoanProgram.CDFI_DIRECT,
+        lender_id=LENDER_ACCION,
+    )
+    routing = compute_program_routing(applicant)
+    actions = compute_improvement_actions(
+        applicant,
+        metrics=None,
+        routing=routing,
+        outcome=DecisionOutcome.ESCALATE,
+    )
+    assert any(a.title == "Align lender and program" for a in actions)

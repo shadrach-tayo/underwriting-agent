@@ -1,12 +1,14 @@
 """Ingest underwriting policy sources into the shared RagPipeline vector index.
 
-Chunks are tagged with a ``program`` metadata field so retrieval / multi-doc
-reasoning can filter by layer instead of treating all policy as one pool:
+Chunks are tagged with ``program`` (policy layer / product type) and optional
+``lender_id`` (lender overlay) so retrieval can filter shared rules vs
+lender-specific criteria:
 
 - ``compliance_floor`` — ECOA / Reg B (boolean gate; never scored)
 - ``eligibility_gate`` — SBA core eligibility adopted as universal min bar
-- ``sba_7a`` — SBA 7(a) program underwriting
-- ``cdfi_direct`` — Accion-style direct CDFI product criteria
+- ``sba_7a`` — SBA 7(a) program underwriting (generic; ``lender_id`` null)
+- ``cdfi_direct`` — CDFI Direct product underwriting (generic when no lender)
+- Lender overlays (e.g. Accion SBA 7(a)) set ``lender_id`` and keep ``program``
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from langchain_core.documents import Document
 from config import IngestTarget, get_settings
 from models import PolicyLayer
 from policy_rag import get_policy_pipeline, policy_sources_dir
+from agents.lender_config import upsert_lender_config_from_text
 from policy_rag.catalog import lookup_source
 from policy_rag.tags import resolve_program
 
@@ -54,6 +57,8 @@ def _base_metadata(path: Path, *, page: int, program: PolicyLayer) -> dict[str, 
         return meta
     meta["title"] = entry.title
     meta["authority"] = entry.authority
+    if entry.lender_id:
+        meta["lender_id"] = entry.lender_id
     if entry.url:
         meta["url"] = entry.url
     if entry.version:
@@ -157,9 +162,14 @@ def list_policy_source_files(data_dir: Path | None = None) -> list[str]:
 
 
 def load_policy_documents(data_dir: Path | None = None) -> list[Document]:
-    """Load policy files from ``data/policy_sources`` (skips SOURCES.md / .gitkeep)."""
+    """Load policy files from ``data/policy_sources`` (skips SOURCES.md / .gitkeep).
+
+    For lender-tagged sources, also extracts structured front matter into
+    ``data/lenders/{lender_id}.json`` + refreshes ``registry.json``.
+    """
     root = data_dir or policy_sources_dir()
     documents: list[Document] = []
+    lender_texts: dict[str, list[str]] = {}
     for path in sorted(root.iterdir()):
         if path.name.startswith(".") or path.name.upper().startswith("SOURCES"):
             continue
@@ -169,13 +179,33 @@ def load_policy_documents(data_dir: Path | None = None) -> list[Document]:
             continue
         suffix = path.suffix.lower()
         if suffix == ".pdf":
-            documents.extend(_load_pdf_pages(path))
+            docs = _load_pdf_pages(path)
         elif suffix in {".docx", ".doc"}:
-            documents.extend(_load_docx(path))
+            docs = _load_docx(path)
         elif suffix == ".md":
-            documents.extend(_load_markdown(path))
+            docs = _load_markdown(path)
         else:
             logger.warning("Skipping unsupported policy file: %s", path.name)
+            continue
+        documents.extend(docs)
+        entry = lookup_source(path.name)
+        if entry is not None and entry.lender_id:
+            lender_texts.setdefault(path.name, []).extend(
+                d.page_content for d in docs if d.page_content.strip()
+            )
+
+    for source_name, parts in lender_texts.items():
+        entry = lookup_source(source_name)
+        if entry is None or not entry.lender_id:
+            continue
+        upsert_lender_config_from_text(
+            text="\n\n".join(parts),
+            source_file=source_name,
+            catalog_lender_id=entry.lender_id,
+            catalog_program=entry.program.value,
+            catalog_url=entry.url,
+        )
+
     by_program: dict[str, int] = {}
     for d in documents:
         key = str(d.metadata.get("program", "unknown"))
@@ -213,6 +243,12 @@ def ingest_policy_sources(
         raise FileNotFoundError(f"No policy documents found in {data_dir or policy_sources_dir()}")
     pipeline = get_policy_pipeline(index_name=resolved_index)
     pipeline.ingest(docs, index_name=resolved_index, targets=resolved_targets)
+    try:
+        from agents.lenders import reload_lenders
+
+        reload_lenders()
+    except Exception:  # noqa: BLE001
+        logger.debug("reload_lenders skipped", exc_info=True)
     return IngestResult(
         index_name=resolved_index,
         targets=tuple(resolved_targets),

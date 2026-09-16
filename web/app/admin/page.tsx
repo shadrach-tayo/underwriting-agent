@@ -113,15 +113,15 @@ export default function AdminPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>RAG status</CardTitle>
             <CardDescription>
               Live view of index configuration and corpus files on disk.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
+          <CardContent className="flex-1 space-y-4 text-sm">
             {status ? (
               <>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
@@ -183,14 +183,14 @@ export default function AdminPage() {
           </CardFooter>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>Ingest</CardTitle>
             <CardDescription>
               Dry-run loads and tags sources; rebuild embeds into pgvector.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
+          <CardContent className="flex-1 space-y-4 text-sm">
             {ingestResult ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                 <dt className="text-muted-foreground">Status</dt>

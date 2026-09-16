@@ -128,6 +128,10 @@ def citations_from_retrieval(result: RetrievalResult) -> list[Citation]:
                         fallback=(entry.effective_date if entry is not None else None),
                     ),
                     program=program,
+                    lender_id=(
+                        _optional_str(meta.get("lender_id"))
+                        or (entry.lender_id if entry is not None else None)
+                    ),
                 ),
                 retrieved_text=text,
                 similarity_score=similarity,

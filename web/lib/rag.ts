@@ -7,6 +7,8 @@ export type ProgramLayer =
   | "sba_7a"
   | "cdfi_direct"
 
+export type LenderFilter = "generic" | "accion" | "frontier_7a"
+
 export type RagHit = {
   clause_id: string
   text: string
@@ -16,6 +18,7 @@ export type RagHit = {
   authority: string
   url?: string | null
   title?: string | null
+  lender_id?: string | null
 }
 
 export type RagSearchResponse = {
@@ -23,6 +26,7 @@ export type RagSearchResponse = {
   index_name: string
   strategy: string
   program_filter: string | null
+  lender_filter: string | null
   with_answer: boolean
   hits: RagHit[]
   answer: string | null
@@ -31,6 +35,7 @@ export type RagSearchResponse = {
 export type RagSearchParams = {
   query: string
   program: ProgramLayer
+  lender: LenderFilter
   withAnswer: boolean
   topK: number
 }
@@ -44,6 +49,7 @@ export const ragSearchKeys = {
       {
         query: params.query.trim(),
         program: params.program,
+        lender: params.lender,
         withAnswer: params.withAnswer,
         topK: params.topK,
       },
@@ -64,6 +70,10 @@ export async function searchRag(
       query: params.query,
       top_k: params.topK,
       program: params.program === "all" ? null : params.program,
+      // Layer debugger: exact program match (shared layers only when "all").
+      exact_program: params.program !== "all",
+      // generic = no lender_id param → exclude lender-tagged chunks server-side
+      lender_id: params.lender === "generic" ? null : params.lender,
       with_answer: params.withAnswer,
     }),
   })

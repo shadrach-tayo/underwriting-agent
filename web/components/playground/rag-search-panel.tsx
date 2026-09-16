@@ -38,7 +38,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useRagSearchQuery } from "@/hooks/use-rag-search"
-import { hitKey, type ProgramLayer, type RagHit } from "@/lib/rag"
+import { hitKey, type LenderFilter, type ProgramLayer, type RagHit } from "@/lib/rag"
 import { cn } from "@/lib/utils"
 import { useRagSearchStore } from "@/stores/rag-search-store"
 
@@ -48,6 +48,12 @@ const PROGRAM_OPTIONS: { value: ProgramLayer; label: string }[] = [
   { value: "eligibility_gate", label: "Eligibility gate" },
   { value: "sba_7a", label: "SBA 7(a)" },
   { value: "cdfi_direct", label: "CDFI Direct" },
+]
+
+const LENDER_OPTIONS: { value: LenderFilter; label: string }[] = [
+  { value: "generic", label: "Generic (no lender overlay)" },
+  { value: "accion", label: "Accion ∪ shared" },
+  { value: "frontier_7a", label: "Frontier 7(a) ∪ shared" },
 ]
 
 function scoreTone(score: number) {
@@ -70,10 +76,12 @@ function snippet(text: string, max = 140) {
 export function RagSearchPanel() {
   const query = useRagSearchStore((s) => s.query)
   const program = useRagSearchStore((s) => s.program)
+  const lender = useRagSearchStore((s) => s.lender)
   const withAnswer = useRagSearchStore((s) => s.withAnswer)
   const openHits = useRagSearchStore((s) => s.openHits)
   const setQuery = useRagSearchStore((s) => s.setQuery)
   const setProgram = useRagSearchStore((s) => s.setProgram)
+  const setLender = useRagSearchStore((s) => s.setLender)
   const setWithAnswer = useRagSearchStore((s) => s.setWithAnswer)
   const setHitOpen = useRagSearchStore((s) => s.setHitOpen)
   const expandAllHits = useRagSearchStore((s) => s.expandAllHits)
@@ -124,8 +132,9 @@ export function RagSearchPanel() {
             Search
           </CardTitle>
           <CardDescription>
-            Filter by policy layer after retrieval. Turn on agent answer only
-            when you want an LLM synthesis with citations.
+            Filter by policy layer and optional lender overlay after retrieval.
+            Turn on agent answer only when you want an LLM synthesis with
+            citations.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-(--card-spacing)">
@@ -147,7 +156,7 @@ export function RagSearchPanel() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
             <div className="space-y-2">
               <Label htmlFor="rag-program">Program layer</Label>
               <Select
@@ -168,25 +177,45 @@ export function RagSearchPanel() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="flex h-9 items-center gap-2 rounded-lg border border-border/80 bg-muted/30 px-3">
-              <Checkbox
-                id="agent-answer"
-                checked={withAnswer}
-                onCheckedChange={(checked) => setWithAnswer(checked === true)}
-              />
-              <Label
-                htmlFor="agent-answer"
-                className="flex cursor-pointer items-center gap-1.5 font-normal"
+            <div className="space-y-2">
+              <Label htmlFor="rag-lender">Lender</Label>
+              <Select
+                value={lender}
+                onValueChange={(value) => {
+                  if (value != null) setLender(value as LenderFilter)
+                }}
               >
-                <HugeiconsIcon
-                  icon={SparklesIcon}
-                  strokeWidth={2}
-                  className="size-3.5 text-muted-foreground"
-                />
-                Agent answer
-              </Label>
+                <SelectTrigger id="rag-lender" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LENDER_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          <div className="flex h-9 w-fit items-center gap-2 rounded-lg border border-border/80 bg-muted/30 px-3">
+            <Checkbox
+              id="agent-answer"
+              checked={withAnswer}
+              onCheckedChange={(checked) => setWithAnswer(checked === true)}
+            />
+            <Label
+              htmlFor="agent-answer"
+              className="flex cursor-pointer items-center gap-1.5 font-normal"
+            >
+              <HugeiconsIcon
+                icon={SparklesIcon}
+                strokeWidth={2}
+                className="size-3.5 text-muted-foreground"
+              />
+              Agent answer
+            </Label>
           </div>
 
           {errorMessage ? (
@@ -268,6 +297,11 @@ function ResultsSection({
           <Badge variant="outline">{result.program_filter}</Badge>
         ) : (
           <Badge variant="outline">all layers</Badge>
+        )}
+        {result.lender_filter ? (
+          <Badge variant="outline">lender:{result.lender_filter}</Badge>
+        ) : (
+          <Badge variant="outline">generic</Badge>
         )}
         {result.with_answer ? (
           <Badge variant="outline">agent answer</Badge>
@@ -430,6 +464,11 @@ function ResultsSection({
                           {hit.authority ? (
                             <Badge variant="outline" className="font-normal">
                               {hit.authority}
+                            </Badge>
+                          ) : null}
+                          {hit.lender_id ? (
+                            <Badge variant="outline" className="font-normal">
+                              {hit.lender_id}
                             </Badge>
                           ) : null}
                         </span>

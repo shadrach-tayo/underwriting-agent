@@ -33,6 +33,7 @@ const initialForm: UnderwriteForm = {
   credit_score_proxy: "690",
   sbss_proxy: "175",
   requested_program: "sba_7a",
+  lender_id: "",
   has_bankruptcy: false,
   has_severe_fraud_alert: false,
   notes: "Synthetic applicant for dual-program routing demos.",
@@ -61,7 +62,7 @@ export const useUnderwriteStore = create<UnderwriteState>()(
       clearResults: () => set({ activeRun: null, formOpen: true }),
     }),
     {
-      name: "underwriting.playground.underwrite.v3",
+      name: "underwriting.playground.underwrite.v4",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({

@@ -76,6 +76,8 @@ ProgramLayerName = Literal[
     "cdfi_direct",
 ]
 
+LenderIdName = Literal["accion", "frontier_7a"]
+
 
 class RagSearchRequest(BaseModel):
     """Playground / console policy retrieval."""
@@ -84,7 +86,25 @@ class RagSearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
     program: ProgramLayerName | None = Field(
         default=None,
-        description="Optional policy-layer filter applied after retrieval.",
+        description=(
+            "Optional policy-layer filter applied after retrieval. "
+            "When set to a product layer, shared compliance/eligibility chunks stay in scope "
+            "unless exact_program=true."
+        ),
+    )
+    lender_id: LenderIdName | None = Field(
+        default=None,
+        description=(
+            "Optional lender overlay. None = generic mode (exclude lender-tagged chunks). "
+            "When set, include that lender's chunks plus shared (null lender_id) rules."
+        ),
+    )
+    exact_program: bool = Field(
+        default=False,
+        description=(
+            "If true with program set, keep only that exact layer "
+            "(playground layer debugger). Default keeps shared gates in scope."
+        ),
     )
     with_answer: bool = Field(
         default=False,
@@ -101,6 +121,7 @@ class RagHit(BaseModel):
     authority: str
     url: str | None = None
     title: str | None = None
+    lender_id: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
@@ -109,6 +130,7 @@ class RagSearchResponse(BaseModel):
     index_name: str
     strategy: str
     program_filter: str | None = None
+    lender_filter: str | None = None
     with_answer: bool = False
     hits: list[RagHit]
     answer: str | None = None
@@ -119,6 +141,7 @@ class RagAskResponse(BaseModel):
     index_name: str
     strategy: str
     program_filter: str | None = None
+    lender_filter: str | None = None
     hits: list[RagHit]
     answer: str
 
@@ -138,6 +161,7 @@ class UnderwriteApplicantRequest(BaseModel):
     has_bankruptcy: bool = False
     has_severe_fraud_alert: bool = False
     requested_program: Literal["sba_7a", "cdfi_direct"] | None = None
+    lender_id: LenderIdName | None = None
     notes: str | None = Field(default=None, max_length=4000)
     metadata: dict[str, str] = Field(default_factory=dict)
 

@@ -46,7 +46,10 @@ def test_citations_from_retrieval_maps_program_layer() -> None:
 def test_catalog_covers_known_policy_files() -> None:
     by_file = {entry.file: entry for entry in load_catalog()}
     assert "SOP 50 10 8.1 effective 10.1.2026_0.docx" in by_file
-    assert by_file["cdfi_direct_accion_criteria.md"].url is None
+    assert "policy_accion_sba_7a.pdf" in by_file
+    assert by_file["policy_accion_sba_7a.pdf"].lender_id == "accion"
+    assert by_file["policy_accion_sba_7a.pdf"].program == PolicyLayer.SBA_7A
+    assert by_file["SOP 50 10 8.1 effective 10.1.2026_0.docx"].lender_id is None
     nested = lookup_source(
         "data/policy_sources/12 CFR Part 202 (up to date as of 9-10-2026).pdf"
     )
@@ -63,6 +66,15 @@ def test_ingest_metadata_stamps_catalog_url() -> None:
     assert meta["url"].startswith("https://www.ecfr.gov/")
     assert meta["title"] == "12 CFR Part 202 (Regulation B)"
     assert meta["authority"] == "regulatory"
+    assert "lender_id" not in meta
+
+    accion_meta = _base_metadata(
+        Path("policy_accion_sba_7a.pdf"),
+        page=0,
+        program=PolicyLayer.SBA_7A,
+    )
+    assert accion_meta["lender_id"] == "accion"
+    assert accion_meta["url"].startswith("https://aofund.org/")
 
 
 def test_citations_from_retrieval_prefers_metadata_url() -> None:
@@ -91,7 +103,15 @@ def test_resolve_program_layers() -> None:
         resolve_program("12 CFR Part 202 (up to date as of 9-10-2026).pdf")
         == PolicyLayer.COMPLIANCE_FLOOR
     )
-    assert resolve_program("cdfi_direct_accion_criteria.md") == PolicyLayer.CDFI_DIRECT
+    assert resolve_program("policy_accion_sba_7a.pdf") == PolicyLayer.SBA_7A
+    # Lender overlay must not be remapped to shared eligibility_gate.
+    assert (
+        resolve_program(
+            "policy_accion_sba_7a.pdf",
+            "Eligibility Requirements. The applicant must be a U.S. citizen.",
+        )
+        == PolicyLayer.SBA_7A
+    )
     assert (
         resolve_program(
             "SOP 50 10 8.1 effective 10.1.2026_0.docx",

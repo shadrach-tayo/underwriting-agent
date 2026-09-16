@@ -101,3 +101,34 @@ def test_underwrite_returns_decision() -> None:
     assert "improvement_actions" in body["decision"]
     assert body["program_routing"]["recommended_program"] == "sba_7a"
     assert len(body["citations"]) == 1
+
+
+def test_underwrite_accepts_lender_id() -> None:
+    decision = _decision()
+    state = {
+        "case_id": "case-lender",
+        "decision": decision,
+        "subagent_outputs": {},
+        "escalation": None,
+    }
+    with patch("http_api.underwrite.run_underwrite", return_value=state) as mocked:
+        client = TestClient(create_app())
+        res = client.post(
+            "/underwrite",
+            json={
+                "case_id": "case-lender",
+                "applicant": {
+                    "business_name": "Accion Demo Co",
+                    "industry": "retail trade",
+                    "annual_revenue": 120000,
+                    "requested_loan_amount": 150000,
+                    "years_in_business": 2,
+                    "requested_program": "sba_7a",
+                    "lender_id": "accion",
+                },
+            },
+        )
+    assert res.status_code == 200, res.text
+    applicant = mocked.call_args.args[0]
+    assert applicant.lender_id == "accion"
+    assert applicant.requested_program == LoanProgram.SBA_7A

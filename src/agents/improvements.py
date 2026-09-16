@@ -72,6 +72,32 @@ def compute_improvement_actions(
         )
 
     if routing is not None:
+        mismatch = routing.ineligible_reasons.get("lender_program_mismatch")
+        if mismatch:
+            offered_hint = ""
+            from agents.lenders import format_lender_label, get_lender
+
+            profile = get_lender(applicant.lender_id)
+            if profile is not None:
+                offered = ", ".join(sorted(p.value for p in profile.offered_programs))
+                offered_hint = f" Offered programs: {offered}."
+            add(
+                ImprovementAction(
+                    area=ImprovementArea.PROGRAM,
+                    priority=ImprovementPriority.HIGH,
+                    title="Align lender and program",
+                    detail=mismatch + offered_hint,
+                    target=(
+                        "Clear lender_id, or switch requested_program to a product "
+                        f"this lender originates"
+                        + (
+                            f" ({format_lender_label(applicant.lender_id)})"
+                            if applicant.lender_id
+                            else ""
+                        )
+                    ),
+                )
+            )
         if not routing.compliance_floor_pass:
             add(
                 ImprovementAction(

@@ -44,6 +44,7 @@ def _applicant_from_request(body: UnderwriteRequest) -> Applicant:
         requested_program=(
             LoanProgram(raw.requested_program) if raw.requested_program else None
         ),
+        lender_id=raw.lender_id,
         metadata=metadata,
     )
 
