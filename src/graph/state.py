@@ -50,6 +50,8 @@ class GraphState(TypedDict, total=False):
     retry_count: int
     max_retries: int
     rerun_targets: Annotated[list[SubagentName], latest]
+    provider_outage: bool
+    provider_outage_reason: Annotated[Optional[str], latest]
 
     decision: Annotated[Optional[Decision], latest]
     escalation: Annotated[Optional[EscalationPackage], latest]

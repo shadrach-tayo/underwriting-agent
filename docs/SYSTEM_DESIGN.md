@@ -66,7 +66,7 @@ API Gateway (Backend API | MCP | Serverless)
 |---------|------------|
 | Missed edge cases | Critic retry loop (`Send`) + HITL |
 | Hallucination | Citation grounding fields + RAG (Week 3) |
-| API / LLM outage | Fail closed to escalate; backoff |
+| API / LLM outage | LangGraph node `RetryPolicy` + `call_with_retry` backoff; fail closed to escalate |
 | Over-conservative declines | Calibrate composite score + term-mod suggestions |
 | Ceiling override abuse | Maker-checker (`override_confirmed_by`) |
 
@@ -75,5 +75,7 @@ API Gateway (Backend API | MCP | Serverless)
 - Uniform `SubagentOutput` so critique/decision treat agents identically
 - Hard-coded risk ceiling in code (`RiskTier.PROHIBITED`), not prompts
 - Selective `Send` retries with merge-by-key `subagent_outputs`
+- Node-level `RetryPolicy` (3 attempts, exponential backoff) on financial/policy; HTTP RAG uses the same helper
+- After provider retries exhaust, `error_handler` fail-closes to HITL instead of auto-approve/deny
 - Policy as **layers** (compliance / eligibility / program), not a flat merge — dual products
 - Policy subagent later compared as LangGraph-native vs Claude Agent SDK

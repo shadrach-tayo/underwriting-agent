@@ -14,10 +14,11 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 | API | FastAPI |
 | MCP | FastMCP (stub tools under `src/mcp_server`) |
 | Evals | DeepEval + Braintrust (+ RAGAS when importable) |
-| Observability | Braintrust (evals) + LangSmith (LangGraph) |
+| Observability | Braintrust (evals) + LangSmith (LangGraph) + `GET /metrics` |
 | Package / env | **uv** (`.venv`) |
 | Web UI | Next.js + shadcn (`web/`) |
 | CI | GitHub Actions — pytest + false-approve hard gate |
+| Metrics | `GET /metrics` + Admin card (decisions/day, escalation rate, latency p50/p95) |
 
 ## Eval snapshot (Week 4)
 

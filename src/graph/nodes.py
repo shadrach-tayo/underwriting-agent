@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Literal
 from uuid import uuid4
 
+from langgraph.errors import NodeError
 from langgraph.types import Send
 
 from agents import (
     compute_improvement_actions,
+    compute_program_routing,
     critique_outputs,
     financial_facts,
     policy_facts,
@@ -89,7 +91,68 @@ def policy_compliance_node(state: GraphState) -> GraphState:
     if state.get("applicant") is None:
         return {}
     output = run_policy_subagent(_build_subagent_state(state, SubagentName.POLICY))
-    return {"subagent_outputs": {output.agent.value: output}}
+    updates: GraphState = {"subagent_outputs": {output.agent.value: output}}
+    if output.provider_outage:
+        updates.update(_outage_state_update(state, "policy_compliance", output))
+    return updates
+
+
+def _outage_state_update(
+    state: GraphState,
+    node: str,
+    output: SubagentOutput,
+    *,
+    error_type: str = "ProviderOutageError",
+) -> GraphState:
+    reason = output.provider_outage_reason or output.conclusion
+    case_id = state.get("case_id") or "unknown"
+    trail = state.get("audit_trail") or []
+    entry = make_audit_entry(
+        case_id=case_id,
+        event="provider_outage",
+        payload={
+            "node": node,
+            "reason": reason,
+            "error_type": error_type,
+        },
+        prev_hash=last_audit_hash(trail),
+    )
+    return {
+        "provider_outage": True,
+        "provider_outage_reason": reason,
+        "audit_trail": [entry],
+    }
+
+
+def provider_error_handler(state: GraphState, error: NodeError) -> GraphState:
+    """Backup if a retryable exception escapes the node after RetryPolicy."""
+    reason = str(error.error) or type(error.error).__name__
+    applicant = state.get("applicant")
+    routing = compute_program_routing(applicant) if applicant is not None else None
+    if error.node == "financial_analysis":
+        output = SubagentOutput(
+            agent=SubagentName.FINANCIAL,
+            conclusion=f"Provider outage after retries; fail-closed escalate: {reason}",
+            confidence=0.0,
+            reasoning_trace=f"provider_outage=true; node={error.node}; {reason}",
+            provider_outage=True,
+            provider_outage_reason=reason,
+        )
+    else:
+        output = SubagentOutput(
+            agent=SubagentName.POLICY,
+            conclusion=f"Provider outage after retries; fail-closed escalate: {reason}",
+            confidence=0.0,
+            reasoning_trace=f"provider_outage=true; node={error.node}; {reason}",
+            program_routing=routing,
+            provider_outage=True,
+            provider_outage_reason=reason,
+        )
+    updates = _outage_state_update(
+        state, error.node, output, error_type=type(error.error).__name__
+    )
+    updates["subagent_outputs"] = {output.agent.value: output}
+    return updates
 
 
 def self_critic_node(state: GraphState) -> GraphState:
@@ -161,6 +224,26 @@ def _policy(state: GraphState) -> SubagentOutput | None:
     return (state.get("subagent_outputs") or {}).get(SubagentName.POLICY.value)
 
 
+def _provider_outage_reason(
+    state: GraphState,
+    financial: SubagentOutput | None,
+    policy: SubagentOutput | None,
+) -> str | None:
+    if state.get("provider_outage"):
+        return (
+            state.get("provider_outage_reason")
+            or "API/LLM outage after retries; fail-closed escalate"
+        )
+    for output in (financial, policy):
+        if output is not None and output.provider_outage:
+            return (
+                output.provider_outage_reason
+                or output.conclusion
+                or "API/LLM outage after retries; fail-closed escalate"
+            )
+    return None
+
+
 def decision_node(state: GraphState) -> GraphState:
     """Composite score + hard-coded risk ceiling → approve/deny/escalate."""
     financial = _financial(state)
@@ -175,6 +258,7 @@ def decision_node(state: GraphState) -> GraphState:
         list(financial.metrics.recommended_term_mods) if financial and financial.metrics else []
     )
 
+    outage_reason = _provider_outage_reason(state, financial, policy)
     if policy and policy.hard_reject:
         reason = policy.hard_reject_reason or policy.conclusion
         decision = Decision(
@@ -202,6 +286,29 @@ def decision_node(state: GraphState) -> GraphState:
                 )
             ],
             citations=citations,
+        )
+        return _decision_update(state, decision)
+
+    if outage_reason:
+        decision = Decision(
+            outcome=DecisionOutcome.ESCALATE,
+            origin=DecisionOrigin.AUTO,
+            risk_tier=risk_tier,
+            ceiling_triggered=False,
+            composite_score=CompositeScore(
+                subagent_agreement=0.0,
+                evidence_coverage=0.0,
+                calibration_adjustment=0.0,
+                composite=0.0,
+            ),
+            rationale=DecisionRationale.from_text(
+                outage_reason,
+                kind=RationaleKind.CRITIC,
+                title="Provider outage",
+            ),
+            program_routing=policy.program_routing if policy else None,
+            citations=citations,
+            term_modifications=term_mods,
         )
         return _decision_update(state, decision)
 
@@ -526,6 +633,8 @@ def hitl_escalation_node(state: GraphState) -> GraphState:
     reason = "Escalated for human underwriter review"
     if decision and decision.ceiling_triggered:
         reason = "Hard-coded risk ceiling; human review required"
+    elif state.get("provider_outage"):
+        reason = "API/LLM outage after retries; human review required"
     elif decision and decision.composite_score and decision.composite_score.composite < 0.45:
         reason = "Confidence below auto-decision threshold"
 

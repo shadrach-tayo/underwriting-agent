@@ -8,9 +8,11 @@ from agents.program_routing import compute_program_routing
 from models import (
     Applicant,
     Citation,
+    ProgramRouting,
     SubagentName,
     SubagentOutput,
 )
+from retries import ProviderOutageError, call_with_retry, classify_provider_error
 from subagent_state import SubagentState
 
 logger = logging.getLogger(__name__)
@@ -35,18 +37,46 @@ def _policy_query(applicant: Applicant) -> str:
     return ". ".join(parts)
 
 
-def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -> list[Citation]:
-    if reuse:
-        return list(reuse)
-    try:
-        from policy_rag import citations_from_retrieval, get_policy_pipeline
-        from policy_rag.filters import ensure_regulatory_citations, filter_citations
+def _has_deterministic_outcome(applicant: Applicant, routing: ProgramRouting) -> bool:
+    """Hard rejects / ineligible tracks do not need live retrieval to decide."""
+    if applicant.has_bankruptcy or applicant.has_severe_fraud_alert:
+        return True
+    if not routing.compliance_floor_pass or not routing.eligibility_gate_pass:
+        return True
+    if routing.ineligible_reasons.get("lender_program_mismatch"):
+        return True
+    return not routing.eligible_programs
 
-        program = (
-            applicant.requested_program.value if applicant.requested_program else None
-        )
-        lender_id = applicant.lender_id
-        fetch_k = 12 if (program or lender_id) else 5
+
+def _outage_output(
+    *,
+    routing: ProgramRouting,
+    retry_index: int,
+    exc: Exception,
+) -> SubagentOutput:
+    reason = str(exc) or exc.__class__.__name__
+    return SubagentOutput(
+        agent=SubagentName.POLICY,
+        conclusion=f"Provider outage after retries; fail-closed escalate: {reason}",
+        confidence=0.0,
+        reasoning_trace=f"provider_outage=true; {reason}",
+        program_routing=routing,
+        provider_outage=True,
+        provider_outage_reason=reason,
+        retry_index=retry_index,
+    )
+
+
+def _retrieve_citations_once(applicant: Applicant) -> list[Citation]:
+    from policy_rag import citations_from_retrieval, get_policy_pipeline
+    from policy_rag.filters import ensure_regulatory_citations, filter_citations
+
+    program = (
+        applicant.requested_program.value if applicant.requested_program else None
+    )
+    lender_id = applicant.lender_id
+    fetch_k = 12 if (program or lender_id) else 5
+    try:
         pipeline = get_policy_pipeline(top_k=fetch_k)
         result = pipeline.retrieve(_policy_query(applicant), top_k=fetch_k)
         pool = citations_from_retrieval(result)
@@ -58,8 +88,19 @@ def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -
         )
         return ensure_regulatory_citations(scoped, pool)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Policy RAG retrieve failed (%s); continuing without citations", exc)
-        return []
+        wrapped = classify_provider_error(exc)
+        if wrapped is exc:
+            raise
+        raise wrapped from exc
+
+
+def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -> list[Citation]:
+    if reuse:
+        return list(reuse)
+    return call_with_retry(
+        lambda: _retrieve_citations_once(applicant),
+        operation="policy_retrieve",
+    )
 
 
 def run_policy_subagent(state: SubagentState) -> SubagentOutput:
@@ -75,8 +116,21 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     if state.get("reuse_evidence") and prior is not None and prior.citations:
         reuse = list(prior.citations)
 
-    citations = _retrieve_citations(applicant, reuse=reuse)
     routing = compute_program_routing(applicant)
+    try:
+        citations = _retrieve_citations(applicant, reuse=reuse)
+    except Exception as exc:  # noqa: BLE001
+        if _has_deterministic_outcome(applicant, routing):
+            logger.warning(
+                "Policy RAG retrieve failed on deterministic path (%s); continuing",
+                exc,
+            )
+            citations = []
+        elif isinstance(exc, ProviderOutageError):
+            logger.warning("Policy RAG retrieve exhausted retries (%s); fail-closed", exc)
+            return _outage_output(routing=routing, retry_index=retry_index, exc=exc)
+        else:
+            raise
 
     notes = [
         f"compliance_floor={'pass' if routing.compliance_floor_pass else 'fail'}",

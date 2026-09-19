@@ -172,6 +172,8 @@ class SubagentOutput(BaseModel):
     program_routing: Optional[ProgramRouting] = None
     hard_reject: bool = False
     hard_reject_reason: Optional[str] = None
+    provider_outage: bool = False
+    provider_outage_reason: Optional[str] = None
     retry_index: int = 0
     produced_at: datetime = Field(default_factory=_now)
 

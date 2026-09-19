@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import TypeVar
@@ -14,6 +15,7 @@ from evals.tracing import span
 from graph.runtime import configure_langsmith, decision_from_state, run_underwrite
 from http_api.deps import SettingsDep
 from http_api.errors import extract_error_message
+from http_api.metrics import METRICS
 from http_api.schemas import UnderwriteRequest, UnderwriteResponse
 from models import Applicant, EscalationPackage, LoanProgram, SubagentOutput
 
@@ -80,7 +82,18 @@ def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResp
                 max_retries=body.max_retries,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Underwrite graph failed")
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            METRICS.record(outcome="error", latency_ms=elapsed_ms, error=True)
+            logger.error(
+                json.dumps(
+                    {
+                        "event": "underwrite.error",
+                        "applicant_id": applicant.applicant_id,
+                        "latency_ms": round(elapsed_ms, 2),
+                        "error": extract_error_message(exc),
+                    }
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=extract_error_message(exc),
@@ -90,6 +103,7 @@ def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResp
         try:
             decision = decision_from_state(state)
         except RuntimeError as exc:
+            METRICS.record(outcome="error", latency_ms=elapsed_ms, error=True)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
@@ -112,6 +126,19 @@ def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResp
                 else _coerce(EscalationPackage, escalation_raw)
             ),
             latency_ms=elapsed_ms,
+        )
+        METRICS.record(outcome=decision.outcome.value, latency_ms=elapsed_ms)
+        logger.info(
+            json.dumps(
+                {
+                    "event": "underwrite.decision",
+                    "case_id": response.case_id,
+                    "outcome": decision.outcome.value,
+                    "latency_ms": round(elapsed_ms, 2),
+                    "n_citations": len(response.citations),
+                    "escalated": response.escalation is not None,
+                }
+            )
         )
         if current is not None:
             current.log(

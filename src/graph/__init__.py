@@ -9,12 +9,14 @@ from graph.nodes import (
     hitl_escalation_node,
     human_capture_node,
     policy_compliance_node,
+    provider_error_handler,
     route_after_critic,
     route_after_decision,
     self_critic_node,
     underwriter_node,
 )
 from graph.state import GraphState, SubagentState
+from retries import node_retry_policy
 
 __all__ = [
     "GraphState",
@@ -25,6 +27,7 @@ __all__ = [
     "decision_from_state",
     "get_compiled_graph",
     "graph",
+    "provider_error_handler",
     "run_underwrite",
 ]
 
@@ -34,10 +37,21 @@ def build_graph():
     from langgraph.graph import END, START, StateGraph
 
     builder = StateGraph(GraphState)
+    retry = node_retry_policy()
 
     builder.add_node("underwriter", underwriter_node)
-    builder.add_node("financial_analysis", financial_analysis_node)
-    builder.add_node("policy_compliance", policy_compliance_node)
+    builder.add_node(
+        "financial_analysis",
+        financial_analysis_node,
+        retry_policy=retry,
+        error_handler=provider_error_handler,
+    )
+    builder.add_node(
+        "policy_compliance",
+        policy_compliance_node,
+        retry_policy=retry,
+        error_handler=provider_error_handler,
+    )
     builder.add_node("self_critic", self_critic_node, defer=True)
     builder.add_node("decision", decision_node)
     builder.add_node("approve_decline", approve_decline_node)

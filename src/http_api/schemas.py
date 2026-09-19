@@ -69,6 +69,29 @@ class ReadyResponse(BaseModel):
     detail: str | None = None
 
 
+class LatencyMetrics(BaseModel):
+    count: int
+    p50: float | None = None
+    p95: float | None = None
+
+
+class OutcomeCounts(BaseModel):
+    approve: int = 0
+    deny: int = 0
+    escalate: int = 0
+
+
+class MetricsResponse(BaseModel):
+    """Process-local underwrite dashboard metrics (UTC day window)."""
+
+    day_utc: str
+    decisions_today: int
+    outcomes: OutcomeCounts
+    escalation_rate: float | None = None
+    errors_today: int = 0
+    latency_ms: LatencyMetrics
+
+
 ProgramLayerName = Literal[
     "compliance_floor",
     "eligibility_gate",

@@ -21,6 +21,7 @@ from http_api.schemas import (
 from models import PolicyLayer
 from policy_rag import citations_from_retrieval, get_policy_pipeline
 from policy_rag.filters import ensure_regulatory_citations, filter_citations
+from retries import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,10 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
         fetch_k = body.top_k * 4 if filtering else body.top_k
         pipeline = get_policy_pipeline(top_k=fetch_k)
         try:
-            result = pipeline.retrieve(query, top_k=fetch_k)
+            result = call_with_retry(
+                lambda: pipeline.retrieve(query, top_k=fetch_k),
+                operation="rag_retrieve",
+            )
         except Exception as exc:  # noqa: BLE001
             logger.exception("RAG retrieve failed")
             raise HTTPException(
@@ -125,7 +129,10 @@ def _rag_search(body: RagSearchRequest, settings: Settings) -> RagSearchResponse
                     ),
                 )
             try:
-                generated = pipeline.generate(query, top_k=fetch_k)
+                generated = call_with_retry(
+                    lambda: pipeline.generate(query, top_k=fetch_k),
+                    operation="rag_generate",
+                )
                 answer = str(generated.get("content") or "")
             except Exception as exc:  # noqa: BLE001
                 logger.exception("RAG generate failed")

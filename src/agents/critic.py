@@ -112,7 +112,17 @@ def critique_outputs(
             seen.add(t)
             unique_rerun.append(t)
 
-    if unique_rerun:
+    outage_agents = [
+        output.agent
+        for output in (financial, policy)
+        if output is not None and output.provider_outage
+    ]
+    if outage_agents:
+        verdict = CritiqueVerdict.ESCALATE
+        unique_rerun = []
+        names = ", ".join(agent.value for agent in outage_agents)
+        notes.append(f"provider outage after node retries ({names}) → escalate")
+    elif unique_rerun:
         if cycle >= max_retries:
             verdict = CritiqueVerdict.ESCALATE
             unique_rerun = []

@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # Hard-coded risk ceiling: cases at/above this score must escalate.
     risk_ceiling: float = Field(default=0.75, ge=0.0, le=1.0)
 
+    # Provider / LangGraph node retries (fail closed after exhaustion).
+    provider_retry_attempts: int = Field(default=3, ge=1, le=6)
+    provider_retry_initial_interval: float = Field(default=0.25, ge=0.0, le=30.0)
+    provider_retry_backoff_factor: float = Field(default=2.0, ge=1.0, le=8.0)
+    provider_retry_max_interval: float = Field(default=2.0, ge=0.1, le=60.0)
+
     # --- RAG / ingest (defaults: pgvector only; ES hybrid opt-in later) ---
     rag_index_name: str = "underwriting_policy_chunk_512"
     rag_chunk_size: int = Field(default=512, ge=64, le=4096)

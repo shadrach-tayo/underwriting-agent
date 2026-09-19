@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import get_settings
 from http_api.admin import router as admin_rag_router
 from http_api.db import ping_database
+from http_api.metrics import METRICS
 from http_api.rag import router as rag_router
-from http_api.schemas import HealthResponse, ReadyResponse
+from http_api.schemas import HealthResponse, MetricsResponse, ReadyResponse
 from http_api.underwrite import router as underwrite_router
 from version import __version__
 
@@ -56,6 +57,11 @@ def create_app() -> FastAPI:
             database_reachable=False,
             detail="Postgres unreachable — start with `docker compose up -d postgres`",
         )
+
+    @application.get("/metrics", response_model=MetricsResponse)
+    def metrics() -> MetricsResponse:
+        """Decisions/day, escalation rate, latency p50/p95 (process-local)."""
+        return MetricsResponse.model_validate(METRICS.snapshot())
 
     return application
 

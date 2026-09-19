@@ -31,6 +31,43 @@ def _cite(text: str, program: PolicyLayer, *, url: str | None = "https://example
     )
 
 
+def test_rag_search_retries_then_succeeds() -> None:
+    result = RetrievalResult(
+        docs=["SBSS minimum score is 165 for SBA 7(a)."],
+        metadata=[{"source": "sop.pdf", "program": "sba_7a", "score": 0.91}],
+        strategy="vector",
+        es_hits=[],
+        rerank=[],
+    )
+    pipeline = MagicMock()
+    pipeline.retrieve.side_effect = [ConnectionError("blip"), result]
+
+    with (
+        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch(
+            "http_api.rag.citations_from_retrieval",
+            return_value=[_cite(result.docs[0], PolicyLayer.SBA_7A)],
+        ),
+    ):
+        client = TestClient(create_app())
+        res = client.post("/rag/search", json={"query": "SBSS score", "top_k": 3})
+
+    assert res.status_code == 200, res.text
+    assert pipeline.retrieve.call_count == 2
+
+
+def test_rag_search_exhausts_retries_returns_502() -> None:
+    pipeline = MagicMock()
+    pipeline.retrieve.side_effect = ConnectionError("voyage down")
+
+    with patch("http_api.rag.get_policy_pipeline", return_value=pipeline):
+        client = TestClient(create_app())
+        res = client.post("/rag/search", json={"query": "SBSS score", "top_k": 3})
+
+    assert res.status_code == 502
+    assert pipeline.retrieve.call_count == 3
+
+
 def test_rag_search_returns_hits() -> None:
     result = RetrievalResult(
         docs=["SBSS minimum score is 165 for SBA 7(a)."],

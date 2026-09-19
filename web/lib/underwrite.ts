@@ -137,6 +137,8 @@ export type SubagentOutput = {
   program_routing: ProgramRouting | null
   hard_reject: boolean
   hard_reject_reason: string | null
+  provider_outage?: boolean
+  provider_outage_reason?: string | null
   retry_index: number
   produced_at: string
 }
