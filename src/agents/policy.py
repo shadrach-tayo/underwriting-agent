@@ -64,7 +64,9 @@ def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -
 
 def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     """Run one policy compliance cycle from isolated SubagentState."""
-    applicant = state["applicant"]
+    applicant = state.get("applicant")
+    if applicant is None:
+        raise ValueError("applicant is required")
     retry_index = state.get("retry_index", 0)
     feedback = state.get("critique_feedback")
     prior = state.get("prior_output")

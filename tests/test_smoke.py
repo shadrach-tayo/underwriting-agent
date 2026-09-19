@@ -78,6 +78,21 @@ def test_financial_analysis_runs() -> None:
     assert 0.0 <= result.metrics.risk_score <= 1.0
 
 
+def test_financial_weak_dscr_not_low() -> None:
+    """Healthy leverage/FICO cannot auto-tier LOW when DSCR is weak (gold-040)."""
+    result = analyze_financials(
+        _applicant(
+            annual_revenue=2_800_000,
+            requested_loan_amount=500_000,
+            credit_score_proxy=710,
+            debt_service_coverage_ratio=1.10,
+        )
+    )
+    assert result.metrics is not None
+    assert result.metrics.risk_tier == RiskTier.MEDIUM
+    assert result.metrics.risk_score >= 0.5
+
+
 def test_policy_hard_reject_bankruptcy() -> None:
     with _patch_policy_rag():
         report = check_policy_compliance(_applicant(has_bankruptcy=True))

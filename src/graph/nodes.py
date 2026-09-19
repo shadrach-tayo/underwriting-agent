@@ -15,6 +15,7 @@ from agents import (
     run_financial_subagent,
     run_policy_subagent,
 )
+from agents.improvements import HEALTHY_DSCR
 from config import get_settings
 from graph.audit import last_audit_hash, make_audit_entry
 from graph.state import GraphState
@@ -319,14 +320,31 @@ def decision_node(state: GraphState) -> GraphState:
             )
         )
 
+    dscr = (
+        financial.metrics.debt_service_coverage
+        if financial and financial.metrics
+        else None
+    )
+    applicant = state.get("applicant")
+    borderline = bool(applicant and (applicant.metadata or {}).get("borderline"))
+
     if composite_value < 0.45 or (
         latest_critique is not None and latest_critique.verdict != CritiqueVerdict.PASS
     ):
         proposed = DecisionOutcome.ESCALATE
         envelope = "Below auto-decision envelope → escalate"
-    elif risk_tier == RiskTier.LOW and composite_value >= 0.55:
+    elif (
+        risk_tier == RiskTier.LOW
+        and composite_value >= 0.55
+        and not borderline
+        and dscr is not None
+        and dscr >= HEALTHY_DSCR
+    ):
         proposed = DecisionOutcome.APPROVE
         envelope = "Within auto-approve envelope"
+    elif borderline or dscr is None or dscr < HEALTHY_DSCR:
+        proposed = DecisionOutcome.ESCALATE
+        envelope = "Borderline or weak DSCR → escalate"
     else:
         proposed = DecisionOutcome.DENY
         envelope = "Outside approve envelope → deny"

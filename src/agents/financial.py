@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agents.improvements import HEALTHY_DSCR, SBA_DSCR_MIN
 from models import (
     Applicant,
     FinancialMetrics,
@@ -13,12 +14,23 @@ from subagent_state import SubagentState
 
 
 def _tier_and_score(applicant: Applicant) -> tuple[RiskTier, float]:
+    """Loan/revenue + FICO base tier, floored by DSCR (weak coverage cannot be LOW)."""
     revenue = max(applicant.annual_revenue, 1.0)
     dti = applicant.requested_loan_amount / revenue
-    if dti < 0.25 and (applicant.credit_score_proxy or 0) >= 700:
+    fico = applicant.credit_score_proxy or 0
+    dscr = applicant.debt_service_coverage_ratio
+
+    if (
+        dti < 0.25
+        and fico >= 700
+        and dscr is not None
+        and dscr >= HEALTHY_DSCR
+    ):
         return RiskTier.LOW, 0.2
     if dti < 0.5:
-        return RiskTier.MEDIUM, 0.5
+        # Sub-SBA DSCR is still medium (not high) when leverage is modest — escalate path.
+        score = 0.55 if dscr is not None and dscr < SBA_DSCR_MIN else 0.5
+        return RiskTier.MEDIUM, score
     return RiskTier.HIGH, 0.85
 
 
