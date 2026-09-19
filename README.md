@@ -9,15 +9,29 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 | Layer | Choice |
 |-------|--------|
 | Orchestration | LangGraph (Python) |
-| Secondary framework | Claude Agent SDK |
-| LLM | Claude (Sonnet) + thin OpenAI fallback |
+| LLM | Claude (Sonnet) + thin OpenAI / DeepSeek fallback for RAG answers |
 | Vector DB | pgvector on Postgres |
 | API | FastAPI |
-| MCP | FastMCP |
+| MCP | FastMCP (stub tools under `src/mcp_server`) |
 | Evals | DeepEval + Braintrust (+ RAGAS when importable) |
-| Observability | Braintrust (evals/runtime) + LangSmith (LangGraph Studio) |
+| Observability | Braintrust (evals) + LangSmith (LangGraph) |
 | Package / env | **uv** (`.venv`) |
 | Web UI | Next.js + shadcn (`web/`) |
+| CI | GitHub Actions — pytest + false-approve hard gate |
+
+## Eval snapshot (Week 4)
+
+Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-gate`):
+
+| Metric | Result | Target |
+|--------|--------|--------|
+| **False-approve rate** | **0.0** | **0** (hard gate) |
+| Decision accuracy | 1.0 | ≥ 0.9 |
+| Program-routing accuracy | 1.0 | ≥ 0.9 |
+| Escalation precision | 1.0 | ≥ 0.8 |
+| Latency p95 | ~215 ms | < 5 s |
+
+Citation / faithfulness need `--judge llm` against an ingested corpus (see [`EVALS.md`](./EVALS.md)). Ops notes: [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
 
 ## Layout
 
@@ -26,7 +40,7 @@ src/
   graph/          # GraphState/SubagentState, nodes, hash-chained audit
   agents/         # Financial, Policy, Critic (SubagentOutput / CritiqueReport)
   mcp_server/     # FastMCP tools
-  api/            # FastAPI health/ready + admin RAG ingest
+  http_api/       # FastAPI health/ready, underwrite, admin RAG
   policy_rag/     # Policy corpus ingest + RagPipeline adapter (≠ dependency `rag`)
   evals/          # Eval suite (Week 4)
   models.py       # Citations, decisions, HITL, audit value objects
@@ -35,9 +49,12 @@ web/              # Next.js console — Admin (RAG) + Playground (agents)
 data/
   policy_sources/ # Public policy docs (Week 1)
   gold_set/       # Labeled synthetic applicants (Week 1)
-docs/             # System design (+ underwriting_agent_system_design.png)
+  lenders/        # Lender offer-matrix overlays
+docs/             # System design + RUNBOOK.md
 terraform/        # AWS ECS + RDS (Week 5)
 tests/
+.github/workflows/ci.yml
+Dockerfile
 ```
 
 ## Setup
@@ -58,15 +75,31 @@ docker compose up -d postgres
 uv run underwriting-agent
 uv run pytest
 
+# Eval hard gate (false-approve must stay 0)
+uv run underwriting-evals --mode graph --judge skip --fail-on-gate
+
 # After VOYAGE_API_KEY is set and Postgres is healthy:
 # uv run underwriting-rag-ingest
-# or via admin API (defaults to pgvector / targets=vector):
+# or via admin API:
 # uv run underwriting-api
 # curl -X POST http://127.0.0.1:8080/admin/rag/ingest -H 'Content-Type: application/json' -d '{}'
 # curl http://127.0.0.1:8080/admin/rag/status
 
 # Web console (Admin + Playground)
 cd web && pnpm install && pnpm dev
+```
+
+### API container
+
+```bash
+docker build -t underwriting-api .
+docker run --rm -p 8080:8080 --env-file .env \
+  -e API_HOST=0.0.0.0 -e API_RELOAD=false \
+  -e POSTGRES_HOST=host.docker.internal -e POSTGRES_PORT=54326 \
+  underwriting-api
+
+# or compose profile (wires Postgres hostname automatically):
+docker compose --profile api up -d --build api
 ```
 
 ### Local LangGraph + LangSmith
@@ -87,7 +120,7 @@ uv run langgraph dev --no-browser
 
 Graph ID: `underwriting` → `src/graph/__init__.py:graph`
 
-`langchain-community` is pinned to `0.3.29` so `ragas` can import (newer community builds dropped `chat_models.vertexai`). Revisit when upgrading evals in Week 4.
+`langchain-community` is pinned for RAGAS compatibility where needed. Revisit pins when upgrading evals.
 
 ## Hard-coded risk ceiling
 
@@ -95,7 +128,7 @@ Graph ID: `underwriting` → `src/graph/__init__.py:graph`
 
 ## Roadmap pace
 
-Week 1 is docs + data (`PROBLEM.md`, system design, policy sources, gold set, `EVALS.md`). Agentic core starts Week 2. Do not skip the false-approve-rate eval design.
+Week 1–3 foundations + RAG are in place. **Week 4** focuses on eval gates, containerization, and the runbook. Week 5 is AWS deploy + demo.
 
 ## License
 

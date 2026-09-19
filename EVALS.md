@@ -85,4 +85,4 @@ Record first full eval pass numbers here after Week 4 Day 1.
 
 | Date | False-approve | Decision acc. | Citation acc. | Program route | Escalation prec. | Notes |
 |------|---------------|---------------|---------------|---------------|------------------|-------|
-| — | — | — | — | — | — | not run yet |
+| 2026-09-19 | 0.0 | 1.0 | n/a (`--judge skip`) | 1.0 | 1.0 | Graph harness; hard gate + suite pass offline. Re-check citation/faithfulness with `--judge llm` + ingested RAG. |

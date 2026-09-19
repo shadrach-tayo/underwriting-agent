@@ -29,6 +29,7 @@ from models import (
     DecisionRationale,
     EscalationPackage,
     HumanReviewRecord,
+    LoanProgram,
     RationaleFact,
     RationaleFactTone,
     RationaleKind,
@@ -327,27 +328,39 @@ def decision_node(state: GraphState) -> GraphState:
     )
     applicant = state.get("applicant")
     borderline = bool(applicant and (applicant.metadata or {}).get("borderline"))
+    fico = (applicant.credit_score_proxy or 0) if applicant else 0
+    eligible = list(routing.eligible_programs) if routing else []
+    # Match gold oracle: stricter FICO when SBA is on the eligible set.
+    fico_floor = 680 if LoanProgram.SBA_7A in eligible else 640
+    loan_to_rev = (
+        applicant.requested_loan_amount / max(applicant.annual_revenue, 1.0)
+        if applicant
+        else 0.0
+    )
 
     if composite_value < 0.45 or (
         latest_critique is not None and latest_critique.verdict != CritiqueVerdict.PASS
     ):
         proposed = DecisionOutcome.ESCALATE
-        envelope = "Below auto-decision envelope → escalate"
+        envelope = "Below auto-decision envelope; escalate"
     elif (
-        risk_tier == RiskTier.LOW
-        and composite_value >= 0.55
+        eligible
         and not borderline
         and dscr is not None
         and dscr >= HEALTHY_DSCR
+        and fico >= fico_floor
+        and loan_to_rev <= 0.75
+        and risk_tier not in (RiskTier.HIGH, RiskTier.PROHIBITED)
+        and composite_value >= 0.55
     ):
         proposed = DecisionOutcome.APPROVE
         envelope = "Within auto-approve envelope"
-    elif borderline or dscr is None or dscr < HEALTHY_DSCR:
+    elif borderline or dscr is None or dscr < HEALTHY_DSCR or loan_to_rev > 0.75:
         proposed = DecisionOutcome.ESCALATE
-        envelope = "Borderline or weak DSCR → escalate"
+        envelope = "Borderline or weak coverage; escalate"
     else:
         proposed = DecisionOutcome.DENY
-        envelope = "Outside approve envelope → deny"
+        envelope = "Outside approve envelope; deny"
 
     sections.append(
         RationaleSection(

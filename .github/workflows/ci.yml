@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Pytest
+        env:
+          BRAINTRUST_TRACING: "false"
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
+        run: uv run pytest -q
+
+  eval-gate:
+    name: Eval hard gate (false-approve)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Oracle harness smoke
+        env:
+          BRAINTRUST_TRACING: "false"
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
+        run: uv run underwriting-evals --mode oracle --judge skip --fail-on-gate
+      - name: Graph eval hard gate
+        env:
+          BRAINTRUST_TRACING: "false"
+          LANGSMITH_TRACING: "false"
+          LANGCHAIN_TRACING_V2: "false"
+        run: >
+          uv run underwriting-evals
+          --mode graph
+          --judge skip
+          --fail-on-gate
+          --json-out eval-report.json
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.json
+          if-no-files-found: ignore

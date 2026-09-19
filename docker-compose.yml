@@ -4,6 +4,9 @@
 #   docker compose up -d postgres
 #   # wait until healthy, then:
 #   uv run underwriting-rag-ingest
+#
+# Optional API container (needs a filled .env with keys as required):
+#   docker compose --profile api up -d --build api
 
 services:
   postgres:
@@ -24,6 +27,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    profiles: ["api"]
+    build: .
+    container_name: underwriting-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      API_HOST: "0.0.0.0"
+      API_PORT: "8080"
+      API_RELOAD: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      LANGSMITH_TRACING: "false"
+      LANGCHAIN_TRACING_V2: "false"
+      BRAINTRUST_TRACING: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   underwriting_pgdata:

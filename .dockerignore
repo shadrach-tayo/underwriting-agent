@@ -1,0 +1,17 @@
+.venv/
+web/node_modules/
+web/.next/
+**/__pycache__/
+**/*.pyc
+.git/
+.github/
+agent-transcripts/
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+terraform/
+docs/
+data/gold_set/
+**/.DS_Store

@@ -10,7 +10,6 @@ requires-python = ">=3.12"
 dependencies = [
     "agent",
     "braintrust>=0.39.0",
-    "claude-agent-sdk>=0.2.124",
     "deepeval>=4.1.2",
     "fastapi>=0.139.2",
     "fastmcp>=3.4.4",
@@ -80,4 +79,4 @@ pythonVersion = "3.12"
 extraPaths = ["src"]
 
 [tool.uv.sources]
-agent = { git = "ssh://git@github.com/shadrach-tayo/ai-engineering-boilerplate.git", rev = "eval" }
+agent = { git = "https://github.com/shadrach-tayo/ai-engineering-boilerplate.git", rev = "eval" }

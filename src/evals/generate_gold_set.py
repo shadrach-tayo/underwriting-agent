@@ -15,7 +15,7 @@ from pathlib import Path
 
 from evals.gold_set import GOLD_SET_PATH, GoldCase, GoldLabel
 from agents.program_routing import compute_program_routing
-from models import Applicant, DecisionOutcome, RiskTier
+from models import Applicant, DecisionOutcome, LoanProgram, RiskTier
 
 # Re-export routing constants for callers / docs that imported them here.
 from agents.program_routing import (  # noqa: F401
