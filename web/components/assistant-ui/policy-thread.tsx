@@ -14,6 +14,7 @@ import {
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
+  SuggestionPrimitive,
   ThreadPrimitive,
   useAuiState,
   type TextMessagePartComponent,
@@ -45,6 +46,7 @@ export function PolicyThread() {
         >
           <AuiIf condition={(s) => s.thread.messages.length === 0}>
             <ThreadWelcome />
+            <ThreadSuggestions />
           </AuiIf>
 
           <div className="mb-12 flex flex-col gap-6 empty:hidden">
@@ -70,7 +72,7 @@ export function PolicyThread() {
 }
 
 const ThreadWelcome: FC = () => (
-  <div className="mb-8 space-y-2 text-center">
+  <div className="mb-6 space-y-2 text-center">
     <h2 className="font-heading text-xl font-semibold tracking-tight">
       Policy chat
     </h2>
@@ -78,6 +80,21 @@ const ThreadWelcome: FC = () => (
       Ask a question. The agent retrieves layered policy chunks, then streams a
       grounded answer with sources.
     </p>
+  </div>
+)
+
+const ThreadSuggestions: FC = () => (
+  <div className="mx-auto mb-6 flex w-full max-w-md flex-col gap-2">
+    <ThreadPrimitive.Suggestions>
+      {() => (
+        <SuggestionPrimitive.Trigger
+          send
+          className="rounded-lg border border-border/70 bg-background px-3 py-2 text-start text-sm transition-colors hover:border-foreground/25 hover:bg-muted/40"
+        >
+          <SuggestionPrimitive.Title />
+        </SuggestionPrimitive.Trigger>
+      )}
+    </ThreadPrimitive.Suggestions>
   </div>
 )
 
@@ -169,14 +186,11 @@ const Composer: FC = () => (
       />
       <div className="flex items-center justify-end">
         <AuiIf condition={(s) => !s.thread.isRunning}>
-          <ComposerPrimitive.Send asChild>
-            <button
-              type="button"
-              className={cn(buttonVariants({ size: "icon-sm" }), "rounded-full")}
-              aria-label="Send message"
-            >
-              <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
-            </button>
+          <ComposerPrimitive.Send
+            className={cn(buttonVariants({ size: "icon-sm" }), "rounded-full")}
+            aria-label="Send message"
+          >
+            <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
           </ComposerPrimitive.Send>
         </AuiIf>
         <AuiIf condition={(s) => s.thread.isRunning}>

@@ -1,17 +1,39 @@
 "use client"
 
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Search01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { RagChatPanel } from "@/components/playground/rag-chat-panel"
 import { RagSearchPanel } from "@/components/playground/rag-search-panel"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { buttonVariants } from "@/components/ui/button"
 import type { PolicyRagMode } from "@/lib/rag"
+import { cn } from "@/lib/utils"
 import { useRagSearchStore } from "@/stores/rag-search-store"
 
+const MODES: {
+  value: PolicyRagMode
+  label: string
+  href: string
+  icon: typeof Search01Icon
+}[] = [
+  { value: "search", label: "Search", href: "/playground/rag", icon: Search01Icon },
+  {
+    value: "chat",
+    label: "Chat",
+    href: "/playground/rag?mode=chat",
+    icon: SparklesIcon,
+  },
+]
+
 export function PolicyRagPlayground() {
-  const mode = useRagSearchStore((s) => s.mode)
-  const setMode = useRagSearchStore((s) => s.setMode)
+  const searchParams = useSearchParams()
+  const persistedMode = useRagSearchStore((s) => s.mode)
+  const setPersistedMode = useRagSearchStore((s) => s.setMode)
+  const urlMode = searchParams.get("mode")
+  const mode: PolicyRagMode =
+    urlMode === "chat" || urlMode === "search" ? urlMode : persistedMode
 
   return (
     <div className="space-y-6">
@@ -29,31 +51,34 @@ export function PolicyRagPlayground() {
         </p>
       </div>
 
-      <Tabs
-        value={mode}
-        onValueChange={(value) => {
-          if (value === "search" || value === "chat") {
-            setMode(value as PolicyRagMode)
-          }
-        }}
+      <div
+        role="tablist"
+        aria-label="Policy RAG mode"
+        className="inline-flex w-fit items-center gap-1 rounded-lg bg-muted p-[3px]"
       >
-        <TabsList>
-          <TabsTrigger value="search">
-            <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
-            Search
-          </TabsTrigger>
-          <TabsTrigger value="chat">
-            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} />
-            Chat
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="search" className="pt-6">
-          <RagSearchPanel />
-        </TabsContent>
-        <TabsContent value="chat" className="pt-6">
-          <RagChatPanel />
-        </TabsContent>
-      </Tabs>
+        {MODES.map((item) => {
+          const selected = mode === item.value
+          return (
+            <Link
+              key={item.value}
+              href={item.href}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setPersistedMode(item.value)}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "gap-1.5 no-underline",
+                selected && "bg-background text-foreground shadow-sm"
+              )}
+            >
+              <HugeiconsIcon icon={item.icon} strokeWidth={2} />
+              {item.label}
+            </Link>
+          )
+        })}
+      </div>
+
+      {mode === "chat" ? <RagChatPanel /> : <RagSearchPanel />}
     </div>
   )
 }

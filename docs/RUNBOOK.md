@@ -43,6 +43,9 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 curl -s http://127.0.0.1:8080/health
 curl -s http://127.0.0.1:8080/ready
 curl -s http://127.0.0.1:8080/metrics
+curl -sN -X POST http://127.0.0.1:8080/rag/ask/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"What SBSS score is required for SBA 7(a)?"}'
 curl -s -X POST http://127.0.0.1:8080/underwrite \
   -H 'Content-Type: application/json' \
   -d '{"applicant":{"business_name":"Acme","industry":"retail","annual_revenue":500000,"requested_loan_amount":75000,"years_in_business":5,"debt_service_coverage_ratio":1.4,"credit_score_proxy":720,"sbss_proxy":180}}'
