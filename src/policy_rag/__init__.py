@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from rag.pipeline import RagConfig, RagPipeline, RetrievalResult
+from rag.pipeline import RagConfig, RagPipeline, RetrievalResult, _dedupe_texts
 
 from config import get_settings
 from models import Citation, PolicyLayer, PolicySource
@@ -20,22 +20,26 @@ __all__ = [
     "RagPipeline",
     "RetrievalResult",
     "build_policy_rag_config",
+    "citations_from_generate",
     "citations_from_retrieval",
+    "generate_payload_from_retrieval",
     "get_policy_pipeline",
+    "llm_text_from_content",
     "policy_sources_dir",
 ]
 
 # Kept for backward-compatible imports; prefer Settings.rag_index_name.
 POLICY_INDEX = "underwriting_policy_chunk_512"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_EFFECTIVE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+_DEFAULT_EFFECTIVE = datetime(2026, 1, 1, tzinfo=UTC)
 
 _LAYER_SYSTEM_PROMPT = """\
 You are an underwriting policy assistant for a dual-program CDFI lender.
 
 Policy is layered — never flatten into one scored rule set:
 1. compliance_floor (ECOA/Reg B): boolean gate on every decision; never a credit score factor.
-2. eligibility_gate (SBA core eligibility, 13 CFR 120.100/120.110): hard categorical yes/no before scoring.
+2. eligibility_gate (SBA core eligibility, 13 CFR 120.100/120.110): \
+hard categorical yes/no before scoring.
 3. Program underwriting: evaluate against sba_7a and/or cdfi_direct as separate products.
 
 When clauses conflict across layers or programs, say so explicitly and route by layer \
@@ -89,6 +93,75 @@ def build_policy_rag_config(
         llm_api_key=settings.deepseek_api_key,
         system_prompt=_LAYER_SYSTEM_PROMPT,
     )
+
+
+def generate_payload_from_retrieval(
+    result: RetrievalResult,
+    *,
+    question: str = "",
+    content: str = "",
+) -> dict[str, Any]:
+    """Rebuild the citation-bearing fields ``RagPipeline.generate`` returns."""
+    return {
+        "question": question,
+        "content": content,
+        "retrieval_context": _dedupe_texts(result.docs),
+        "docs": list(result.metadata),
+        "reranks": result.rerank,
+        "strategy": result.strategy,
+    }
+
+
+def citations_from_generate(generated: dict[str, Any]) -> list[Citation]:
+    """Map ``RagPipeline.generate`` docs + retrieval_context into citations."""
+    metadata = generated.get("docs")
+    texts = generated.get("retrieval_context")
+    meta_list = [item if isinstance(item, dict) else {} for item in metadata] if isinstance(
+        metadata, list
+    ) else []
+    text_list = [str(item) if item is not None else "" for item in texts] if isinstance(
+        texts, list
+    ) else []
+    count = max(len(meta_list), len(text_list))
+    if count == 0:
+        return []
+    docs: list[str] = []
+    metas: list[dict[str, Any]] = []
+    for index in range(count):
+        docs.append(text_list[index] if index < len(text_list) else "")
+        metas.append(meta_list[index] if index < len(meta_list) else {})
+    return citations_from_retrieval(
+        RetrievalResult(
+            docs=docs,
+            metadata=metas,
+            rerank=generated.get("reranks") if isinstance(generated.get("reranks"), list) else None,
+            strategy=str(generated.get("strategy") or "vector"),
+            total=count,
+        )
+    )
+
+
+def llm_text_from_content(content: object) -> str:
+    """Normalize ChatOpenAI ``content`` (str, list, or blocks) to plain text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+            else:
+                text = getattr(item, "text", None)
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return str(content)
 
 
 def citations_from_retrieval(result: RetrievalResult) -> list[Citation]:
@@ -196,7 +269,7 @@ def _parse_datetime(value: object) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
+        return parsed.replace(tzinfo=UTC)
     return parsed
 
 

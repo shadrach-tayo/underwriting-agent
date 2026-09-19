@@ -29,7 +29,7 @@ uv run underwriting-api
 | `/` | Hub |
 | `/admin` | RAG status + ingest (calls `/admin/rag/*`) |
 | `/playground` | Overview + sidebar |
-| `/playground/rag` | Policy RAG search (+ opt-in agent answer) |
+| `/playground/rag` | Policy RAG search, or streaming generate chat |
 | `/playground/underwrite` | Applicant → agent stub |
 
 ## Env

@@ -18,7 +18,7 @@ const features = [
     href: "/playground/rag",
     title: "Policy RAG",
     description:
-      "Search the layered policy corpus in pgvector. Optionally generate an LLM answer over retrieved chunks.",
+      "Search the layered policy corpus, or chat with a streaming generate agent that cites retrieved sources.",
     badge: "Live",
     icon: Search01Icon,
   },

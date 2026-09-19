@@ -12,7 +12,7 @@ from models import (
     SubagentName,
     SubagentOutput,
 )
-from retries import ProviderOutageError, call_with_retry, classify_provider_error
+from retries import classify_provider_error
 from subagent_state import SubagentState
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def _outage_output(
     reason = str(exc) or exc.__class__.__name__
     return SubagentOutput(
         agent=SubagentName.POLICY,
-        conclusion=f"Provider outage after retries; fail-closed escalate: {reason}",
+        conclusion=f"Provider outage; fail-closed escalate: {reason}",
         confidence=0.0,
         reasoning_trace=f"provider_outage=true; {reason}",
         program_routing=routing,
@@ -97,10 +97,8 @@ def _retrieve_citations_once(applicant: Applicant) -> list[Citation]:
 def _retrieve_citations(applicant: Applicant, *, reuse: list[Citation] | None) -> list[Citation]:
     if reuse:
         return list(reuse)
-    return call_with_retry(
-        lambda: _retrieve_citations_once(applicant),
-        operation="policy_retrieve",
-    )
+    # One retrieve: Voyage/ChatOpenAI retry inside the SDK. Do not wrap again.
+    return _retrieve_citations_once(applicant)
 
 
 def run_policy_subagent(state: SubagentState) -> SubagentOutput:
@@ -126,11 +124,9 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
                 exc,
             )
             citations = []
-        elif isinstance(exc, ProviderOutageError):
-            logger.warning("Policy RAG retrieve exhausted retries (%s); fail-closed", exc)
-            return _outage_output(routing=routing, retry_index=retry_index, exc=exc)
         else:
-            raise
+            logger.warning("Policy RAG retrieve failed (%s); fail-closed", exc)
+            return _outage_output(routing=routing, retry_index=retry_index, exc=exc)
 
     notes = [
         f"compliance_floor={'pass' if routing.compliance_floor_pass else 'fail'}",

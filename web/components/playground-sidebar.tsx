@@ -35,7 +35,7 @@ const navItems = [
   {
     href: "/playground/rag",
     label: "Policy RAG",
-    description: "Search & agent answer",
+    description: "Search or chat",
     icon: Search01Icon,
     exact: false,
   },

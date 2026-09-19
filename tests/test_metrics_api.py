@@ -12,6 +12,9 @@ from models import (
     Decision,
     DecisionOrigin,
     DecisionOutcome,
+    DecisionRationale,
+    RationaleKind,
+    RationaleSection,
     RiskTier,
 )
 
@@ -35,7 +38,16 @@ def test_metrics_records_underwrite_outcomes() -> None:
         origin=DecisionOrigin.AUTO,
         risk_tier=RiskTier.MEDIUM,
         ceiling_triggered=False,
-        rationale="borderline",
+        rationale=DecisionRationale(
+            summary="Policy",
+            sections=[
+                RationaleSection(
+                    kind=RationaleKind.POLICY,
+                    title="Policy",
+                    body="Policy",
+                )
+            ],
+        ),
     )
     state = {
         "case_id": "case-metrics-1",

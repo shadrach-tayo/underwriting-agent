@@ -1,5 +1,5 @@
-import { RagSearchPanel } from "@/components/playground/rag-search-panel"
+import { PolicyRagPlayground } from "@/components/playground/policy-rag-playground"
 
 export default function PlaygroundRagPage() {
-  return <RagSearchPanel />
+  return <PolicyRagPlayground />
 }

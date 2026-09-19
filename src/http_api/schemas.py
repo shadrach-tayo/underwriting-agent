@@ -135,6 +135,20 @@ class RagSearchRequest(BaseModel):
     )
 
 
+class RagChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class RagAskStreamRequest(RagSearchRequest):
+    """Chat / streaming generate over retrieved policy context."""
+
+    messages: list[RagChatMessage] = Field(
+        default_factory=list,
+        description="Optional prior turns. The latest user text should also be in query.",
+    )
+
+
 class RagHit(BaseModel):
     clause_id: str
     text: str

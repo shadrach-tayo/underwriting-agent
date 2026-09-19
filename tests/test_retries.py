@@ -1,4 +1,4 @@
-"""Provider retry helper + LangGraph fail-closed outage path."""
+"""Provider error taxonomy + fail-closed outage path (no stacked app retries)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,9 @@ from retries import (
     RetryableProviderError,
     call_with_retry,
     classify_provider_error,
+    is_fatal_provider_error,
     is_retryable,
+    should_retry_node,
 )
 
 
@@ -54,11 +56,37 @@ def test_is_retryable_for_connection_and_429() -> None:
     assert not is_retryable(httpx.HTTPStatusError("bad request", request=request, response=bad))
 
 
+def test_quota_and_auth_are_fatal_and_not_retryable() -> None:
+    quota = RuntimeError(
+        "Error code: 429 - {'error': {'message': 'You have no credits remaining.', "
+        "'type': 'insufficient_quota', 'code': 'credit_balance_exhausted'}}"
+    )
+    assert is_fatal_provider_error(quota)
+    assert not is_retryable(quota)
+    assert not should_retry_node(quota)
+    request = httpx.Request("GET", "https://api.example.test")
+    unauthorized = httpx.HTTPStatusError(
+        "unauthorized",
+        request=request,
+        response=httpx.Response(401, request=request),
+    )
+    assert is_fatal_provider_error(unauthorized)
+    assert not is_retryable(unauthorized)
+
+
+def test_nodes_do_not_retry_provider_failures() -> None:
+    assert should_retry_node(ConnectionError("voyage down")) is False
+    assert should_retry_node(RetryableProviderError("blip")) is False
+    assert should_retry_node(ProviderOutageError("done")) is False
+
+
 def test_classify_wraps_retryable() -> None:
     wrapped = classify_provider_error(ConnectionError("reset"))
     assert isinstance(wrapped, RetryableProviderError)
     original = ValueError("nope")
     assert classify_provider_error(original) is original
+    quota = RuntimeError("insufficient_quota: no credits remaining")
+    assert classify_provider_error(quota) is quota
 
 
 def test_call_with_retry_succeeds_after_blip() -> None:
@@ -70,16 +98,20 @@ def test_call_with_retry_succeeds_after_blip() -> None:
             raise ConnectionError("blip")
         return "ok"
 
-    assert call_with_retry(flaky, operation="test_retrieve", sleep=lambda _: None) == "ok"
+    assert call_with_retry(flaky, operation="test_infra", sleep=lambda _: None) == "ok"
     assert calls["n"] == 3
 
 
-def test_call_with_retry_exhausts_to_outage() -> None:
-    def always_down() -> str:
-        raise ConnectionError("down")
+def test_call_with_retry_does_not_retry_quota() -> None:
+    calls = {"n": 0}
 
-    with pytest.raises(ProviderOutageError, match="test_retrieve"):
-        call_with_retry(always_down, operation="test_retrieve", attempts=3, sleep=lambda _: None)
+    def billed() -> str:
+        calls["n"] += 1
+        raise RuntimeError("insufficient_quota: You have no credits remaining.")
+
+    with pytest.raises(RuntimeError, match="insufficient_quota"):
+        call_with_retry(billed, operation="test_llm", sleep=lambda _: None)
+    assert calls["n"] == 1
 
 
 def test_call_with_retry_does_not_retry_logic_errors() -> None:
@@ -90,7 +122,7 @@ def test_call_with_retry_does_not_retry_logic_errors() -> None:
         raise ValueError("bad input")
 
     with pytest.raises(ValueError, match="bad input"):
-        call_with_retry(boom, operation="test_retrieve", sleep=lambda _: None)
+        call_with_retry(boom, operation="test_infra", sleep=lambda _: None)
     assert calls["n"] == 1
 
 
@@ -119,89 +151,17 @@ def test_critic_escalates_on_provider_outage_without_send() -> None:
     assert "provider outage" in report.notes
 
 
-def test_graph_retries_then_succeeds() -> None:
-    from datetime import datetime, timezone
-
-    from models import Citation, PolicyLayer, PolicySource
-
-    stub = [
-        Citation(
-            clause_id="stub:eligibility",
-            source=PolicySource(
-                source_id="stub",
-                name="stub-policy",
-                authority="lender",
-                version="test",
-                effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
-                program=PolicyLayer.ELIGIBILITY_GATE,
-            ),
-            retrieved_text="Stub citation.",
-            similarity_score=0.5,
-            program=PolicyLayer.ELIGIBILITY_GATE,
-        )
-    ]
+def test_graph_provider_outage_fail_closed_on_first_error() -> None:
     calls = {"n": 0}
 
-    def flaky(*_args: object, **_kwargs: object) -> list[Citation]:
+    def once(*_args: object, **_kwargs: object) -> list[Any]:
         calls["n"] += 1
-        if calls["n"] < 3:
-            raise ConnectionError("voyage blip")
-        return stub
+        raise ConnectionError("voyage down")
 
     g = build_graph()
-    with patch("agents.policy._retrieve_citations_once", side_effect=flaky):
+    with patch("agents.policy._retrieve_citations_once", side_effect=once):
         result = g.invoke({"applicant": _applicant()})
-    assert calls["n"] == 3
-    assert result["decision"].outcome == DecisionOutcome.APPROVE
-    assert not result.get("provider_outage")
-
-
-def test_graph_node_retry_policy_then_succeeds() -> None:
-    from datetime import datetime, timezone
-
-    from models import Citation, PolicyLayer, PolicySource
-
-    stub = [
-        Citation(
-            clause_id="stub:eligibility",
-            source=PolicySource(
-                source_id="stub",
-                name="stub-policy",
-                authority="lender",
-                version="test",
-                effective_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
-                program=PolicyLayer.ELIGIBILITY_GATE,
-            ),
-            retrieved_text="Stub citation.",
-            similarity_score=0.5,
-            program=PolicyLayer.ELIGIBILITY_GATE,
-        )
-    ]
-    calls = {"n": 0}
-
-    def flaky(state: dict[str, Any]) -> SubagentOutput:
-        calls["n"] += 1
-        if calls["n"] < 3:
-            raise ConnectionError("node blip")
-        from agents.policy import run_policy_subagent as real
-
-        with patch("agents.policy._retrieve_citations", return_value=stub):
-            return real(state)
-
-    g = build_graph()
-    with patch("graph.nodes.run_policy_subagent", side_effect=flaky):
-        result = g.invoke({"applicant": _applicant()})
-    assert calls["n"] == 3
-    assert result["decision"].outcome == DecisionOutcome.APPROVE
-
-
-def test_graph_provider_outage_fail_closed_escalates() -> None:
-    g = build_graph()
-    with patch(
-        "agents.policy._retrieve_citations_once",
-        side_effect=ConnectionError("voyage down"),
-    ):
-        result = g.invoke({"applicant": _applicant()})
+    assert calls["n"] == 1
     assert result["decision"].outcome == DecisionOutcome.ESCALATE
     assert result.get("provider_outage") is True
     assert result["escalation"] is not None
@@ -209,6 +169,21 @@ def test_graph_provider_outage_fail_closed_escalates() -> None:
     assert policy.provider_outage is True
     assert any(e.event == "provider_outage" for e in result["audit_trail"])
     assert any(e.event == "escalation" for e in result["audit_trail"])
+
+
+def test_graph_quota_fail_closed_without_retry() -> None:
+    calls = {"n": 0}
+
+    def billed(*_args: object, **_kwargs: object) -> list[Any]:
+        calls["n"] += 1
+        raise RuntimeError("insufficient_quota: You have no credits remaining.")
+
+    g = build_graph()
+    with patch("agents.policy._retrieve_citations_once", side_effect=billed):
+        result = g.invoke({"applicant": _applicant()})
+    assert calls["n"] == 1
+    assert result["decision"].outcome == DecisionOutcome.ESCALATE
+    assert result.get("provider_outage") is True
 
 
 def test_graph_hard_reject_survives_retrieval_outage() -> None:

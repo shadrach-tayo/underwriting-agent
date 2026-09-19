@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -31,32 +32,7 @@ def _cite(text: str, program: PolicyLayer, *, url: str | None = "https://example
     )
 
 
-def test_rag_search_retries_then_succeeds() -> None:
-    result = RetrievalResult(
-        docs=["SBSS minimum score is 165 for SBA 7(a)."],
-        metadata=[{"source": "sop.pdf", "program": "sba_7a", "score": 0.91}],
-        strategy="vector",
-        es_hits=[],
-        rerank=[],
-    )
-    pipeline = MagicMock()
-    pipeline.retrieve.side_effect = [ConnectionError("blip"), result]
-
-    with (
-        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
-        patch(
-            "http_api.rag.citations_from_retrieval",
-            return_value=[_cite(result.docs[0], PolicyLayer.SBA_7A)],
-        ),
-    ):
-        client = TestClient(create_app())
-        res = client.post("/rag/search", json={"query": "SBSS score", "top_k": 3})
-
-    assert res.status_code == 200, res.text
-    assert pipeline.retrieve.call_count == 2
-
-
-def test_rag_search_exhausts_retries_returns_502() -> None:
+def test_rag_search_provider_error_returns_502_without_app_retry() -> None:
     pipeline = MagicMock()
     pipeline.retrieve.side_effect = ConnectionError("voyage down")
 
@@ -65,7 +41,7 @@ def test_rag_search_exhausts_retries_returns_502() -> None:
         res = client.post("/rag/search", json={"query": "SBSS score", "top_k": 3})
 
     assert res.status_code == 502
-    assert pipeline.retrieve.call_count == 3
+    assert pipeline.retrieve.call_count == 1
 
 
 def test_rag_search_returns_hits() -> None:
@@ -104,7 +80,7 @@ def test_rag_search_returns_hits() -> None:
     pipeline.generate.assert_not_called()
 
 
-def test_rag_search_with_answer_calls_generate() -> None:
+def test_rag_search_with_answer_uses_generate_citations() -> None:
     result = RetrievalResult(
         docs=["CDFI direct needs $50k revenue."],
         metadata=[{"source": "accion.md", "program": "cdfi_direct", "score": 0.88}],
@@ -112,18 +88,23 @@ def test_rag_search_with_answer_calls_generate() -> None:
         es_hits=[],
         rerank=[],
     )
+    generate_cite = _cite("Generate-cited revenue floor is $50k.", PolicyLayer.CDFI_DIRECT)
+    generate_cite.clause_id = "c-from-generate"
     pipeline = MagicMock()
     pipeline.retrieve.return_value = result
     pipeline.generate.return_value = {
         "content": "Applicants need at least $50k annual revenue.",
-        "retrieval_context": result.docs,
+        "retrieval_context": ["Generate-cited revenue floor is $50k."],
+        "docs": [{"source": "accion.md", "program": "cdfi_direct", "score": 0.88}],
+        "strategy": "vector",
     }
 
     with (
         patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch("http_api.rag._require_generate_key"),
         patch(
-            "http_api.rag.citations_from_retrieval",
-            return_value=[_cite(result.docs[0], PolicyLayer.CDFI_DIRECT)],
+            "http_api.rag.citations_from_generate",
+            return_value=[generate_cite],
         ),
     ):
         client = TestClient(create_app())
@@ -140,7 +121,9 @@ def test_rag_search_with_answer_calls_generate() -> None:
     body = res.json()
     assert body["with_answer"] is True
     assert "50k" in body["answer"]
+    assert body["hits"][0]["clause_id"] == "c-from-generate"
     pipeline.generate.assert_called_once()
+    pipeline.retrieve.assert_not_called()
 
 
 def test_rag_ask_forces_answer() -> None:
@@ -157,6 +140,7 @@ def test_rag_ask_forces_answer() -> None:
 
     with (
         patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch("http_api.rag._require_generate_key"),
         patch(
             "http_api.rag.citations_from_retrieval",
             return_value=[_cite(result.docs[0], PolicyLayer.COMPLIANCE_FLOOR)],
@@ -168,6 +152,74 @@ def test_rag_ask_forces_answer() -> None:
     assert res.status_code == 200
     assert res.json()["answer"]
     pipeline.generate.assert_called_once()
+
+
+def test_rag_ask_stream_emits_sources_and_tokens() -> None:
+    result = RetrievalResult(
+        docs=["SBSS minimum score is 165."],
+        metadata=[{"source": "sop.pdf", "program": "sba_7a", "score": 0.91}],
+        strategy="vector",
+        es_hits=[],
+        rerank=[],
+    )
+    chunk = MagicMock()
+    chunk.content = "Score is 165."
+    chunk.additional_kwargs = {"reasoning_content": "Checking SOP 50 10."}
+    llm = MagicMock()
+    llm.stream.return_value = [chunk]
+    pipeline = MagicMock()
+    pipeline.retrieve.return_value = result
+    pipeline._get_llm.return_value = llm
+    pipeline.config.system_prompt = "policy assistant"
+
+    with (
+        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch("http_api.rag._require_generate_key"),
+        patch(
+            "http_api.rag.citations_from_generate",
+            return_value=[_cite(result.docs[0], PolicyLayer.SBA_7A)],
+        ),
+    ):
+        client = TestClient(create_app())
+        res = client.post("/rag/ask/stream", json={"query": "SBSS minimum?"})
+
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/event-stream")
+    events = [
+        json.loads(line.removeprefix("data: "))
+        for line in res.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    types = [event["type"] for event in events]
+    assert types[0] == "status"
+    assert "sources" in types
+    assert "reasoning" in types
+    assert "token" in types
+    assert types[-1] == "done"
+    sources = next(event for event in events if event["type"] == "sources")
+    assert sources["hits"][0]["program"] == "sba_7a"
+    llm.stream.assert_called_once()
+
+
+def test_rag_ask_stream_provider_error_emits_error_event() -> None:
+    pipeline = MagicMock()
+    pipeline.retrieve.side_effect = ConnectionError("voyage down")
+
+    with (
+        patch("http_api.rag.get_policy_pipeline", return_value=pipeline),
+        patch("http_api.rag._require_generate_key"),
+    ):
+        client = TestClient(create_app())
+        res = client.post("/rag/ask/stream", json={"query": "SBSS minimum?"})
+
+    assert res.status_code == 200
+    events = [
+        json.loads(line.removeprefix("data: "))
+        for line in res.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert events[-1]["type"] == "error"
+    assert "voyage" in events[-1]["detail"].lower() or "down" in events[-1]["detail"].lower()
 
 
 def test_rag_search_generic_lender_excludes_accion_overlay() -> None:

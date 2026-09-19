@@ -16,10 +16,12 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 ## If the LLM / embedding provider is down
 
 - Deterministic path (financial tiering, program routing, risk ceiling, hard rejects) still runs without an LLM.
-- Policy retrieve and `/rag/search` / `/rag/ask` retry transient 408/429/5xx and connection errors (3 attempts, exponential backoff). Sleep is skipped under pytest.
-- After retries are exhausted, the policy/financial **LangGraph nodes** fail closed: the graph completes with `escalate` + a `provider_outage` audit event (not a 502, and not an auto-approve).
+- Voyage / DeepSeek (`ChatOpenAI`) retry transient 429/5xx inside the SDK. The graph and `/rag/*` do **not** add another retry loop on top.
+- Quota, billing, and auth errors are fatal — no retry, fail immediately.
+- After the SDK fails on an otherwise-eligible file, the policy node fail-closes: the graph completes with `escalate` + a `provider_outage` audit event (not a 502, and not an auto-approve).
 - Hard-reject / ineligible tracks still deny even if retrieval is down (they do not need citations).
-- `/rag/search` and `/rag/ask` return **502** after retries exhaust (playground is not a credit decision).
+- `/rag/search` and `/rag/ask` return **502** on the first surfaced provider error (playground is not a credit decision).
+- `/rag/ask/stream` keeps the SSE open and emits an `error` event instead of a 502 once tokens have started.
 - LLM judges (`--judge llm`) will fail; use `--judge skip` / heuristic for CI.
 - Structured logs still emit `underwrite.decision` / `underwrite.error` JSON lines with outcome + latency.
 

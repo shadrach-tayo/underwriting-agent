@@ -8,7 +8,13 @@ from unittest.mock import patch
 from rag.pipeline import RetrievalResult
 
 from models import PolicyLayer
-from policy_rag import POLICY_INDEX, citations_from_retrieval, policy_sources_dir
+from policy_rag import (
+    POLICY_INDEX,
+    citations_from_generate,
+    citations_from_retrieval,
+    llm_text_from_content,
+    policy_sources_dir,
+)
 from policy_rag.catalog import load_catalog, lookup_source
 from policy_rag.ingest import _base_metadata
 from policy_rag.tags import resolve_program
@@ -75,6 +81,38 @@ def test_ingest_metadata_stamps_catalog_url() -> None:
     )
     assert accion_meta["lender_id"] == "accion"
     assert accion_meta["url"].startswith("https://aofund.org/")
+
+
+def test_citations_from_generate_maps_docs_and_context() -> None:
+    citations = citations_from_generate(
+        {
+            "content": "SBSS minimum is 165.",
+            "retrieval_context": ["SBSS minimum score is 165."],
+            "docs": [
+                {
+                    "source": "12 CFR Part 202 (up to date as of 9-10-2026).pdf",
+                    "page": 3,
+                    "score": 0.91,
+                    "program": "compliance_floor",
+                }
+            ],
+            "strategy": "vector",
+        }
+    )
+    assert len(citations) == 1
+    assert citations[0].program == PolicyLayer.COMPLIANCE_FLOOR
+    assert "165" in citations[0].retrieved_text
+    assert citations[0].source.authority == "regulatory"
+
+
+def test_citations_from_generate_empty_payload() -> None:
+    assert citations_from_generate({"content": "none"}) == []
+
+
+def test_llm_text_from_content_flattens_blocks() -> None:
+    assert llm_text_from_content("plain") == "plain"
+    assert llm_text_from_content([{"type": "text", "text": "A"}, {"text": "B"}]) == "AB"
+    assert llm_text_from_content(None) == ""
 
 
 def test_citations_from_retrieval_prefers_metadata_url() -> None:

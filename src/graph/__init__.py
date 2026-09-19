@@ -16,7 +16,6 @@ from graph.nodes import (
     underwriter_node,
 )
 from graph.state import GraphState, SubagentState
-from retries import node_retry_policy
 
 __all__ = [
     "GraphState",
@@ -37,19 +36,17 @@ def build_graph():
     from langgraph.graph import END, START, StateGraph
 
     builder = StateGraph(GraphState)
-    retry = node_retry_policy()
 
     builder.add_node("underwriter", underwriter_node)
+    # No node RetryPolicy: Voyage/ChatOpenAI already retry. Stacking blows latency.
     builder.add_node(
         "financial_analysis",
         financial_analysis_node,
-        retry_policy=retry,
         error_handler=provider_error_handler,
     )
     builder.add_node(
         "policy_compliance",
         policy_compliance_node,
-        retry_policy=retry,
         error_handler=provider_error_handler,
     )
     builder.add_node("self_critic", self_critic_node, defer=True)

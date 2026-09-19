@@ -1,6 +1,8 @@
-"""Shared backoff for LangGraph nodes and API/LLM provider calls.
+"""Provider error taxonomy + optional backoff for non-SDK call sites.
 
-SYSTEM_DESIGN: API / LLM outage → backoff, then fail closed to escalate.
+Provider HTTP (Voyage / DeepSeek / ChatOpenAI) is retried by the SDK.
+This module does **not** stack another loop on those calls. After the SDK
+gives up, fail closed. Fatal errors (quota, auth) never retry.
 """
 
 from __future__ import annotations
@@ -11,13 +13,12 @@ import random
 import time
 from collections.abc import Callable
 
-from langgraph.types import RetryPolicy
-
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 
 RETRYABLE_STATUS_CODES = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+FATAL_STATUS_CODES = frozenset({400, 401, 403, 404})
 _RETRYABLE_MARKERS = (
     "rate limit",
     "too many requests",
@@ -30,14 +31,29 @@ _RETRYABLE_MARKERS = (
     "econnreset",
     "econnrefused",
 )
+_FATAL_MARKERS = (
+    "insufficient_quota",
+    "insufficient_funds",
+    "credit_balance",
+    "credits remaining",
+    "no credits",
+    "billing hard limit",
+    "invalid_api_key",
+    "invalid api key",
+    "incorrect api key",
+    "authentication",
+    "unauthorized",
+    "permission denied",
+    "forbidden",
+)
 
 
 class RetryableProviderError(Exception):
-    """Transient Voyage / DeepSeek / HTTP failure that should be retried."""
+    """Transient Voyage / DeepSeek / HTTP failure."""
 
 
 class ProviderOutageError(RetryableProviderError):
-    """Retries exhausted. Nodes should fail closed; HTTP should return 502."""
+    """Provider call failed after the SDK (or a non-SDK helper) gave up."""
 
 
 def _under_pytest() -> bool:
@@ -75,9 +91,21 @@ def _walk_exceptions(exc: BaseException) -> list[BaseException]:
     return out
 
 
+def is_fatal_provider_error(exc: BaseException) -> bool:
+    """Quota, auth, and other errors that must not be retried."""
+    for item in _walk_exceptions(exc):
+        code = _status_code(item)
+        if code in FATAL_STATUS_CODES:
+            return True
+        text = str(item).lower()
+        if any(marker in text for marker in _FATAL_MARKERS):
+            return True
+    return False
+
+
 def is_retryable(exc: BaseException) -> bool:
-    """True for transient provider / network failures; false for logic bugs."""
-    if isinstance(exc, ProviderOutageError):
+    """True only for transient failures. Fatal quota/auth errors are never retried."""
+    if isinstance(exc, ProviderOutageError) or is_fatal_provider_error(exc):
         return False
     try:
         import httpx
@@ -120,9 +148,20 @@ def is_retryable(exc: BaseException) -> bool:
     return False
 
 
+def should_retry_node(exc: BaseException) -> bool:
+    """LangGraph node safety net — never re-run after a provider/SDK failure."""
+    if is_fatal_provider_error(exc) or isinstance(exc, ProviderOutageError):
+        return False
+    if isinstance(exc, RetryableProviderError):
+        return False
+    return False
+
+
 def classify_provider_error(exc: Exception) -> Exception:
-    """Wrap retryable failures so LangGraph ``retry_on`` can match them."""
+    """Tag retryable transport failures; leave fatal / logic errors untouched."""
     if isinstance(exc, (RetryableProviderError, ProviderOutageError)):
+        return exc
+    if is_fatal_provider_error(exc):
         return exc
     if is_retryable(exc):
         return RetryableProviderError(str(exc) or exc.__class__.__name__)
@@ -151,7 +190,11 @@ def call_with_retry[T](
     attempts: int | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> T:
-    """Retry ``fn`` with exponential backoff; raise ``ProviderOutageError`` if exhausted."""
+    """Conditional backoff for **non-SDK** call sites.
+
+    Do not wrap Voyage / ChatOpenAI / DeepSeek — those already retry. Fatal
+    errors (quota, auth) stop on the first attempt.
+    """
     settings = get_settings()
     max_attempts = attempts if attempts is not None else settings.provider_retry_attempts
     last: Exception | None = None
@@ -180,18 +223,3 @@ def call_with_retry[T](
                 sleep(delay)
     assert last is not None
     raise ProviderOutageError(f"{operation} failed: {last}") from last
-
-
-def node_retry_policy() -> RetryPolicy:
-    """LangGraph node RetryPolicy for financial / policy (includes first attempt)."""
-    settings = get_settings()
-    interval = 0.0 if _under_pytest() else settings.provider_retry_initial_interval
-    max_interval = 0.0 if _under_pytest() else settings.provider_retry_max_interval
-    return RetryPolicy(
-        initial_interval=interval,
-        backoff_factor=settings.provider_retry_backoff_factor,
-        max_interval=max(interval, max_interval),
-        max_attempts=settings.provider_retry_attempts,
-        jitter=not _under_pytest(),
-        retry_on=is_retryable,
-    )

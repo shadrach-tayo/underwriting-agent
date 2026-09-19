@@ -2,60 +2,33 @@
 
 import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  ArrowDown01Icon,
-  Search01Icon,
-  SparklesIcon,
-} from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 
 import { Markdown } from "@/components/markdown"
+import { RagFilters } from "@/components/playground/rag-filters"
 import { SourceLink } from "@/components/playground/source-link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useRagSearchQuery } from "@/hooks/use-rag-search"
-import { hitKey, type LenderFilter, type ProgramLayer, type RagHit } from "@/lib/rag"
+import { hitKey, type RagHit } from "@/lib/rag"
 import { formatLender, formatProgram } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
 import { useRagSearchStore } from "@/stores/rag-search-store"
-
-const PROGRAM_OPTIONS: { value: ProgramLayer; label: string }[] = [
-  { value: "all", label: "All layers" },
-  { value: "compliance_floor", label: "Compliance floor" },
-  { value: "eligibility_gate", label: "Eligibility gate" },
-  { value: "sba_7a", label: "SBA 7(a)" },
-  { value: "cdfi_direct", label: "CDFI Direct" },
-]
-
-const LENDER_OPTIONS: { value: LenderFilter; label: string }[] = [
-  { value: "generic", label: "Generic (no lender overlay)" },
-  { value: "accion", label: "Accion ∪ shared" },
-  { value: "frontier_7a", label: "Frontier 7(a) ∪ shared" },
-]
 
 function scoreTone(score: number) {
   if (score >= 0.55) return "default" as const
@@ -76,32 +49,14 @@ function snippet(text: string, max = 140) {
 
 export function RagSearchPanel() {
   const query = useRagSearchStore((s) => s.query)
-  const program = useRagSearchStore((s) => s.program)
-  const lender = useRagSearchStore((s) => s.lender)
-  const withAnswer = useRagSearchStore((s) => s.withAnswer)
   const openHits = useRagSearchStore((s) => s.openHits)
   const setQuery = useRagSearchStore((s) => s.setQuery)
-  const setProgram = useRagSearchStore((s) => s.setProgram)
-  const setLender = useRagSearchStore((s) => s.setLender)
-  const setWithAnswer = useRagSearchStore((s) => s.setWithAnswer)
   const setHitOpen = useRagSearchStore((s) => s.setHitOpen)
   const expandAllHits = useRagSearchStore((s) => s.expandAllHits)
   const collapseAllHits = useRagSearchStore((s) => s.collapseAllHits)
   const clearResults = useRagSearchStore((s) => s.clearResults)
 
   const { result, errorMessage, isSearching, runSearch } = useRagSearchQuery()
-
-  function openReference(index: number) {
-    if (!result) return
-    const hit = result.hits[index]
-    if (!hit) return
-    setHitOpen(hitKey(hit, index), true)
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`rag-hit-${index}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-    })
-  }
 
   function onQueryKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -112,20 +67,6 @@ export function RagSearchPanel() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Policy RAG
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Dense retrieve from pgvector. Search state persists across navigation
-          and refresh. Agent answer is opt-in via{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-            POST /rag/search
-          </code>
-          .
-        </p>
-      </div>
-
       <Card>
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
@@ -133,9 +74,8 @@ export function RagSearchPanel() {
             Search
           </CardTitle>
           <CardDescription>
-            Filter by policy layer and optional lender overlay after retrieval.
-            Turn on agent answer only when you want an LLM synthesis with
-            citations.
+            Pure retrieval — no LLM. Filter by policy layer and optional lender
+            overlay after the dense search.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-(--card-spacing)">
@@ -152,72 +92,12 @@ export function RagSearchPanel() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onQueryKeyDown}
-              placeholder="Ask a policy question…"
+              placeholder="Search policy clauses…"
               className="min-h-24 resize-y"
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="rag-program">Program layer</Label>
-              <Select
-                value={program}
-                onValueChange={(value) => {
-                  if (value != null) setProgram(value as ProgramLayer)
-                }}
-              >
-                <SelectTrigger id="rag-program" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROGRAM_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rag-lender">Lender</Label>
-              <Select
-                value={lender}
-                onValueChange={(value) => {
-                  if (value != null) setLender(value as LenderFilter)
-                }}
-              >
-                <SelectTrigger id="rag-lender" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LENDER_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex h-9 w-fit items-center gap-2 rounded-lg border border-border/80 bg-muted/30 px-3">
-            <Checkbox
-              id="agent-answer"
-              checked={withAnswer}
-              onCheckedChange={(checked) => setWithAnswer(checked === true)}
-            />
-            <Label
-              htmlFor="agent-answer"
-              className="flex cursor-pointer items-center gap-1.5 font-normal"
-            >
-              <HugeiconsIcon
-                icon={SparklesIcon}
-                strokeWidth={2}
-                className="size-3.5 text-muted-foreground"
-              />
-              Agent answer
-            </Label>
-          </div>
+          <RagFilters programId="rag-program" lenderId="rag-lender" />
 
           {errorMessage ? (
             <div
@@ -249,13 +129,7 @@ export function RagSearchPanel() {
             disabled={isSearching || !query.trim()}
             onClick={() => void runSearch({ force: true })}
           >
-            {isSearching
-              ? withAnswer
-                ? "Searching + answering…"
-                : "Searching…"
-              : withAnswer
-                ? "Search + answer"
-                : "Search policy"}
+            {isSearching ? "Searching…" : "Search policy"}
           </Button>
         </CardFooter>
       </Card>
@@ -267,7 +141,6 @@ export function RagSearchPanel() {
           setHitOpen={setHitOpen}
           expandAllHits={expandAllHits}
           collapseAllHits={collapseAllHits}
-          openReference={openReference}
         />
       ) : null}
     </div>
@@ -280,14 +153,12 @@ function ResultsSection({
   setHitOpen,
   expandAllHits,
   collapseAllHits,
-  openReference,
 }: {
   result: NonNullable<ReturnType<typeof useRagSearchQuery>["result"]>
   openHits: Record<string, boolean>
   setHitOpen: (key: string, open: boolean) => void
   expandAllHits: (hits: RagHit[]) => void
   collapseAllHits: () => void
-  openReference: (index: number) => void
 }) {
   return (
     <div className="space-y-6">
@@ -295,9 +166,7 @@ function ResultsSection({
         <Badge variant="secondary">{result.hits.length} hits</Badge>
         <Badge variant="outline">{result.strategy}</Badge>
         {result.program_filter ? (
-          <Badge variant="outline">
-            {formatProgram(result.program_filter)}
-          </Badge>
+          <Badge variant="outline">{formatProgram(result.program_filter)}</Badge>
         ) : (
           <Badge variant="outline">all layers</Badge>
         )}
@@ -308,88 +177,7 @@ function ResultsSection({
         ) : (
           <Badge variant="outline">generic</Badge>
         )}
-        {result.with_answer ? (
-          <Badge variant="outline">agent answer</Badge>
-        ) : null}
       </div>
-
-      {result.answer ? (
-        <Card className="ring-primary/15">
-          <CardHeader className="border-b">
-            <CardTitle className="flex items-center gap-2">
-              <HugeiconsIcon
-                icon={SparklesIcon}
-                strokeWidth={2}
-                className="size-4"
-              />
-              Agent answer
-            </CardTitle>
-            <CardDescription>
-              LLM synthesis over the retrieved chunks below. Use references to
-              jump to source evidence.
-            </CardDescription>
-            <CardAction>
-              <Badge variant="secondary">{result.hits.length} sources</Badge>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-5 pt-(--card-spacing)">
-            <Markdown>{result.answer}</Markdown>
-            <Separator />
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  References
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Click to open a chunk
-                </p>
-              </div>
-              <ol className="space-y-2">
-                {result.hits.map((hit, index) => (
-                  <li key={hitKey(hit, index)}>
-                    <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => openReference(index)}
-                        className={cn(
-                          "flex w-full items-start gap-3 text-start transition-colors",
-                          "hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                        )}
-                      >
-                        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-background font-mono text-[11px] font-medium ring-1 ring-border">
-                          {index + 1}
-                        </span>
-                        <span className="min-w-0 flex-1 space-y-1">
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <Badge variant="secondary" className="font-normal">
-                              {formatProgram(hit.program)}
-                            </Badge>
-                            <Badge
-                              variant={scoreTone(hit.score)}
-                              className="font-mono font-normal"
-                            >
-                              {hit.score.toFixed(3)}
-                            </Badge>
-                          </span>
-                          <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                            {snippet(hit.text)}
-                          </span>
-                        </span>
-                      </button>
-                      <SourceLink
-                        href={hit.url}
-                        className="mt-2 block truncate ps-9 font-mono text-[11px]"
-                      >
-                        {hit.title || sourceLabel(hit.source)}
-                      </SourceLink>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
@@ -498,7 +286,7 @@ function ResultsSection({
                       href={hit.url}
                       className="block truncate px-4 pb-3 ps-13 font-mono text-[11px]"
                     >
-                      {hit.title || hit.source}
+                      {hit.title || hit.source || sourceLabel(hit.source)}
                     </SourceLink>
                     <CollapsibleContent className="overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up">
                       <div className="space-y-3 border-t border-border/70 px-4 py-3 ps-13">

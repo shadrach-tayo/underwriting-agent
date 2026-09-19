@@ -6,24 +6,25 @@ import { createJSONStorage, persist } from "zustand/middleware"
 import {
   hitKey,
   type LenderFilter,
+  type PolicyRagMode,
   type ProgramLayer,
   type RagHit,
   type RagSearchParams,
 } from "@/lib/rag"
 
 type RagSearchState = {
+  mode: PolicyRagMode
   query: string
   program: ProgramLayer
   lender: LenderFilter
-  withAnswer: boolean
   topK: number
   /** Last submitted search — drives TanStack Query + survives navigation. */
   activeSearch: RagSearchParams | null
   openHits: Record<string, boolean>
+  setMode: (mode: PolicyRagMode) => void
   setQuery: (query: string) => void
   setProgram: (program: ProgramLayer) => void
   setLender: (lender: LenderFilter) => void
-  setWithAnswer: (withAnswer: boolean) => void
   setTopK: (topK: number) => void
   commitSearch: () => RagSearchParams | null
   clearResults: () => void
@@ -40,27 +41,26 @@ const defaultQuery =
 export const useRagSearchStore = create<RagSearchState>()(
   persist(
     (set, get) => ({
+      mode: "search",
       query: defaultQuery,
       program: "all",
       lender: "generic",
-      withAnswer: false,
       topK: 5,
       activeSearch: null,
       openHits: {},
+      setMode: (mode) => set({ mode }),
       setQuery: (query) => set({ query }),
       setProgram: (program) => set({ program }),
       setLender: (lender) => set({ lender }),
-      setWithAnswer: (withAnswer) => set({ withAnswer }),
       setTopK: (topK) => set({ topK }),
       commitSearch: () => {
-        const { query, program, lender, withAnswer, topK } = get()
+        const { query, program, lender, topK } = get()
         const trimmed = query.trim()
         if (!trimmed) return null
         const activeSearch: RagSearchParams = {
           query: trimmed,
           program,
           lender,
-          withAnswer,
           topK,
         }
         set({ activeSearch })
@@ -89,14 +89,14 @@ export const useRagSearchStore = create<RagSearchState>()(
       collapseAllHits: () => set({ openHits: {} }),
     }),
     {
-      name: "underwriting.playground.rag.v2",
+      name: "underwriting.playground.rag.v3",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({
+        mode: state.mode,
         query: state.query,
         program: state.program,
         lender: state.lender,
-        withAnswer: state.withAnswer,
         topK: state.topK,
         activeSearch: state.activeSearch,
         openHits: state.openHits,
