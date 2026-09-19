@@ -97,7 +97,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     if mismatch:
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion=f"Escalate — {mismatch}",
+            conclusion=f"Escalate: {mismatch}",
             confidence=0.95,
             reasoning_trace="; ".join(notes + [mismatch]),
             citations=citations,
@@ -109,26 +109,26 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     if applicant.has_bankruptcy:
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion="Hard reject — bankruptcy on file",
+            conclusion="Hard reject: bankruptcy on file",
             confidence=1.0,
             reasoning_trace="; ".join(notes + ["hard_reject:bankruptcy"]),
             citations=citations,
             program_routing=routing,
             hard_reject=True,
-            hard_reject_reason="Bankruptcy on file — auto-deny per policy",
+            hard_reject_reason="Bankruptcy on file; auto-deny per policy",
             retry_index=retry_index,
         )
 
     if applicant.has_severe_fraud_alert:
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion="Hard reject — severe fraud alert",
+            conclusion="Hard reject: severe fraud alert",
             confidence=1.0,
             reasoning_trace="; ".join(notes + ["hard_reject:fraud_alert"]),
             citations=citations,
             program_routing=routing,
             hard_reject=True,
-            hard_reject_reason="Severe fraud alert — auto-deny per policy",
+            hard_reject_reason="Severe fraud alert; auto-deny per policy",
             retry_index=retry_index,
         )
 
@@ -138,7 +138,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
         )
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion=f"Hard reject — {reason}",
+            conclusion=f"Hard reject: {reason}",
             confidence=1.0,
             reasoning_trace="; ".join(notes + [reason]),
             citations=citations,
@@ -154,7 +154,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
         )
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion=f"Hard reject — {reason}",
+            conclusion=f"Hard reject: {reason}",
             confidence=1.0,
             reasoning_trace="; ".join(notes + [reason]),
             citations=citations,
@@ -170,7 +170,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
         if applicant.metadata.get("borderline"):
             return SubagentOutput(
                 agent=SubagentName.POLICY,
-                conclusion="Borderline file with no eligible program — escalate",
+                conclusion="Borderline file with no eligible program; escalate",
                 confidence=0.55,
                 reasoning_trace="; ".join(notes + [reason, "borderline=true"]),
                 citations=citations,
@@ -180,7 +180,7 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
             )
         return SubagentOutput(
             agent=SubagentName.POLICY,
-            conclusion="Deny — no eligible SBA 7(a) or CDFI Direct track",
+            conclusion="Deny: no eligible SBA 7(a) or CDFI Direct track",
             confidence=0.9,
             reasoning_trace="; ".join(notes + [reason]),
             citations=citations,

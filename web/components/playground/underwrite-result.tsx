@@ -15,6 +15,7 @@ import {
   formatCurrency,
   formatLender,
   formatProgram,
+  formatStatusLabel,
   normalizeRationale,
   outcomeTone,
   parseTraceFacts,
@@ -306,9 +307,12 @@ function RationaleView({
                 <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                   {section.title}
                 </p>
-                <Badge variant="outline" className="text-[10px] capitalize">
-                  {section.kind.replaceAll("_", " ")}
-                </Badge>
+                {formatStatusLabel(section.kind).toLowerCase() !==
+                section.title.trim().toLowerCase() ? (
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {formatStatusLabel(section.kind)}
+                  </Badge>
+                ) : null}
               </div>
               <SectionBody section={section} />
             </div>
@@ -382,12 +386,14 @@ export function UnderwriteResultView({
 
   const metaBits = [
     applicant.industry,
-    formatProgram(applicant.requested_program),
-    formatLender(applicant.lender_id),
+    applicant.requested_program
+      ? formatProgram(applicant.requested_program)
+      : null,
+    applicant.lender_id ? formatLender(applicant.lender_id) : null,
     `${applicant.years_in_business} yrs`,
   ]
-    .filter(Boolean)
-    .map((bit) => String(bit).toUpperCase())
+    .filter((bit): bit is string => Boolean(bit) && bit !== "—")
+    .map((bit) => bit.toUpperCase())
 
   return (
     <div className={cn("space-y-8", loading && "opacity-60")}>
@@ -419,7 +425,7 @@ export function UnderwriteResultView({
               tone === "neutral" && "bg-muted-foreground"
             )}
           />
-          Recommendation · {decision.outcome}
+          Recommendation · {formatStatusLabel(decision.outcome)}
         </p>
       </header>
 
@@ -439,7 +445,7 @@ export function UnderwriteResultView({
               Risk tier
             </p>
             <p className="mt-1 text-xl font-semibold tracking-tight capitalize">
-              {decision.risk_tier}
+              {formatStatusLabel(decision.risk_tier)}
             </p>
           </div>
           <div>
@@ -602,10 +608,12 @@ export function UnderwriteResultView({
                 key={reason.reason_code}
                 className="rounded-lg border bg-muted/40 px-3 py-2 text-sm"
               >
-                <span className="font-medium">{reason.reason_code}</span>
+                <span className="font-medium">
+                  {formatStatusLabel(reason.reason_code)}
+                </span>
                 <span className="text-muted-foreground">
                   {" "}
-                  — {reason.description}
+                  · {reason.description}
                 </span>
               </li>
             ))}
@@ -708,10 +716,10 @@ function ImprovementActionsView({
                   toneClass(priorityTone(action.priority))
                 )}
               >
-                {action.priority}
+                {formatStatusLabel(action.priority)}
               </Badge>
               <Badge variant="secondary" className="text-[10px] capitalize">
-                {action.area}
+                {formatStatusLabel(action.area)}
               </Badge>
             </div>
             <p className="mt-2 text-sm font-medium tracking-tight">

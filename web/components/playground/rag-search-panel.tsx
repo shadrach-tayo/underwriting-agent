@@ -39,6 +39,7 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useRagSearchQuery } from "@/hooks/use-rag-search"
 import { hitKey, type LenderFilter, type ProgramLayer, type RagHit } from "@/lib/rag"
+import { formatLender, formatProgram } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
 import { useRagSearchStore } from "@/stores/rag-search-store"
 
@@ -294,12 +295,16 @@ function ResultsSection({
         <Badge variant="secondary">{result.hits.length} hits</Badge>
         <Badge variant="outline">{result.strategy}</Badge>
         {result.program_filter ? (
-          <Badge variant="outline">{result.program_filter}</Badge>
+          <Badge variant="outline">
+            {formatProgram(result.program_filter)}
+          </Badge>
         ) : (
           <Badge variant="outline">all layers</Badge>
         )}
         {result.lender_filter ? (
-          <Badge variant="outline">lender:{result.lender_filter}</Badge>
+          <Badge variant="outline">
+            Lender · {formatLender(result.lender_filter)}
+          </Badge>
         ) : (
           <Badge variant="outline">generic</Badge>
         )}
@@ -357,7 +362,7 @@ function ResultsSection({
                         <span className="min-w-0 flex-1 space-y-1">
                           <span className="flex flex-wrap items-center gap-1.5">
                             <Badge variant="secondary" className="font-normal">
-                              {hit.program}
+                              {formatProgram(hit.program)}
                             </Badge>
                             <Badge
                               variant={scoreTone(hit.score)}
@@ -454,7 +459,9 @@ function ResultsSection({
                       </span>
                       <span className="min-w-0 flex-1 space-y-2">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant="secondary">{hit.program}</Badge>
+                          <Badge variant="secondary">
+                            {formatProgram(hit.program)}
+                          </Badge>
                           <Badge
                             variant={scoreTone(hit.score)}
                             className="font-mono"
@@ -468,7 +475,7 @@ function ResultsSection({
                           ) : null}
                           {hit.lender_id ? (
                             <Badge variant="outline" className="font-normal">
-                              {hit.lender_id}
+                              {formatLender(hit.lender_id)}
                             </Badge>
                           ) : null}
                         </span>

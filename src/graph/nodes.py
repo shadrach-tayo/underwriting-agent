@@ -231,7 +231,7 @@ def decision_node(state: GraphState) -> GraphState:
     routing = policy.program_routing if policy else None
     if routing is not None and not routing.eligible_programs:
         routing_body = (
-            policy.reasoning_trace if policy else "No eligible program track — escalate for review"
+            policy.reasoning_trace if policy else "No eligible program track; escalate for review"
         )
         decision = Decision(
             outcome=DecisionOutcome.ESCALATE,
@@ -385,7 +385,7 @@ def decision_node(state: GraphState) -> GraphState:
             RationaleSection(
                 kind=RationaleKind.ENVELOPE,
                 title="Risk ceiling",
-                body="Hard-coded risk ceiling triggered — human review required",
+                body="Hard-coded risk ceiling triggered; human review required",
                 facts=[
                     RationaleFact(
                         key="risk_score",
@@ -512,7 +512,7 @@ def hitl_escalation_node(state: GraphState) -> GraphState:
 
     reason = "Escalated for human underwriter review"
     if decision and decision.ceiling_triggered:
-        reason = "Hard-coded risk ceiling — human review required"
+        reason = "Hard-coded risk ceiling; human review required"
     elif decision and decision.composite_score and decision.composite_score.composite < 0.45:
         reason = "Confidence below auto-decision threshold"
 

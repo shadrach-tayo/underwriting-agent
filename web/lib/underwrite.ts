@@ -264,20 +264,48 @@ export function formatCurrency(value: number | null | undefined) {
   }).format(value)
 }
 
+/** Snake/kebab status tokens → Title Case labels for UI (spaces, not em dashes). */
+export function formatStatusLabel(value: string | null | undefined): string {
+  if (!value) return "—"
+  const known: Record<string, string> = {
+    approve: "Approve",
+    deny: "Deny",
+    escalate: "Escalate",
+    hard_reject: "Hard reject",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    prohibited: "Prohibited",
+    financial: "Financial",
+    policy: "Policy",
+    critic: "Critic",
+    envelope: "Envelope",
+    human: "Human",
+    routing: "Routing",
+    general: "General",
+  }
+  if (known[value]) return known[value]
+  return value
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ")
+}
+
 export function formatProgram(value: string | null | undefined) {
   if (!value) return "—"
   if (value === "sba_7a") return "SBA 7(a)"
   if (value === "cdfi_direct") return "CDFI Direct"
   if (value === "compliance_floor") return "Compliance floor"
   if (value === "eligibility_gate") return "Eligibility gate"
-  return value.replaceAll("_", " ")
+  return formatStatusLabel(value)
 }
 
 export function formatLender(value: string | null | undefined) {
   if (!value) return "—"
   if (value === "accion") return "Accion"
   if (value === "frontier_7a") return "Frontier 7(a)"
-  return value.replaceAll("_", " ")
+  return formatStatusLabel(value)
 }
 
 export function outcomeTone(outcome: string | null | undefined) {
@@ -404,7 +432,7 @@ function formatParsedValue(key: string, raw: string): string {
   if (["pass", "fail"].includes(v.toLowerCase())) {
     return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase()
   }
-  if (v.includes("_")) return v.replaceAll("_", " ")
+  if (v.includes("_") || v.includes("-")) return formatStatusLabel(v)
   return v
 }
 
@@ -447,7 +475,7 @@ export function parseTraceFacts(trace: string): RationaleFact[] {
     if (normalizedKey.length < 2) continue
     facts.push({
       key: normalizedKey,
-      label: FACT_LABELS[normalizedKey] ?? key.replaceAll("_", " "),
+      label: FACT_LABELS[normalizedKey] ?? formatStatusLabel(normalizedKey),
       value: formatParsedValue(normalizedKey, raw),
       tone: inferFactTone(normalizedKey, raw),
       detail: raw !== formatParsedValue(normalizedKey, raw) ? raw : null,
