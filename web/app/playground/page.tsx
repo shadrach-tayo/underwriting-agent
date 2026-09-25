@@ -26,8 +26,8 @@ const features = [
     href: "/playground/underwrite",
     title: "Underwrite",
     description:
-      "Submit a synthetic SME applicant to the LangGraph underwriting agent (stub until POST /underwrite).",
-    badge: "Stub",
+      "Run a gold-set case or a synthetic SME applicant through the LangGraph underwriting agent.",
+    badge: "Live",
     icon: AiBrain01Icon,
   },
 ] as const

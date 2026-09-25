@@ -5,20 +5,42 @@ import { createJSONStorage, persist } from "zustand/middleware"
 
 import {
   buildUnderwritePayload,
+  goldCaseToForm,
+  type DecisionOutcome,
+  type GoldSetCase,
   type UnderwriteForm,
   type UnderwriteRequestParams,
 } from "@/lib/underwrite"
+
+export type LastRunRecord = {
+  outcome: DecisionOutcome
+  at: string
+}
+
+export type HitlRecord = {
+  outcome: DecisionOutcome
+  cause: string
+  at: string
+  agentOutcome: DecisionOutcome
+}
 
 type UnderwriteState = {
   form: UnderwriteForm
   /** Last submitted run — drives TanStack Query + survives navigation. */
   activeRun: UnderwriteRequestParams | null
   formOpen: boolean
+  selectedCaseId: string | null
+  selectedApplicantId: string | null
+  lastOutcomes: Record<string, LastRunRecord>
+  hitlDecisions: Record<string, HitlRecord>
   updateField: <K extends keyof UnderwriteForm>(
     key: K,
     value: UnderwriteForm[K]
   ) => void
   setFormOpen: (open: boolean) => void
+  loadGoldCase: (row: GoldSetCase) => void
+  recordOutcome: (caseId: string, outcome: DecisionOutcome) => void
+  recordHitl: (caseId: string, record: HitlRecord) => void
   commitRun: () => UnderwriteRequestParams | null
   clearResults: () => void
 }
@@ -45,14 +67,43 @@ export const useUnderwriteStore = create<UnderwriteState>()(
       form: initialForm,
       activeRun: null,
       formOpen: true,
+      selectedCaseId: null,
+      selectedApplicantId: null,
+      lastOutcomes: {},
+      hitlDecisions: {},
       updateField: (key, value) =>
         set((state) => ({
           form: { ...state.form, [key]: value },
         })),
       setFormOpen: (formOpen) => set({ formOpen }),
+      loadGoldCase: (row) =>
+        set({
+          form: goldCaseToForm(row),
+          selectedCaseId: row.case_id,
+          selectedApplicantId: row.applicant_id,
+          formOpen: true,
+        }),
+      recordOutcome: (caseId, outcome) =>
+        set((state) => ({
+          lastOutcomes: {
+            ...state.lastOutcomes,
+            [caseId]: { outcome, at: new Date().toISOString() },
+          },
+        })),
+      recordHitl: (caseId, record) =>
+        set((state) => ({
+          hitlDecisions: {
+            ...state.hitlDecisions,
+            [caseId]: record,
+          },
+        })),
       commitRun: () => {
         try {
-          const activeRun = buildUnderwritePayload(get().form)
+          const { form, selectedCaseId, selectedApplicantId } = get()
+          const activeRun = buildUnderwritePayload(form, {
+            case_id: selectedCaseId,
+            applicant_id: selectedApplicantId,
+          })
           set({ activeRun })
           return activeRun
         } catch {
@@ -62,13 +113,17 @@ export const useUnderwriteStore = create<UnderwriteState>()(
       clearResults: () => set({ activeRun: null, formOpen: true }),
     }),
     {
-      name: "underwriting.playground.underwrite.v4",
+      name: "underwriting.playground.underwrite.v6",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({
         form: state.form,
         activeRun: state.activeRun,
         formOpen: state.formOpen,
+        selectedCaseId: state.selectedCaseId,
+        selectedApplicantId: state.selectedApplicantId,
+        lastOutcomes: state.lastOutcomes,
+        hitlDecisions: state.hitlDecisions,
       }),
     }
   )

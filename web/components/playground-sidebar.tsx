@@ -42,7 +42,7 @@ const navItems = [
   {
     href: "/playground/underwrite",
     label: "Underwrite",
-    description: "Applicant → agent",
+    description: "Gold set → agent",
     icon: AiBrain01Icon,
     exact: false,
   },

@@ -11,12 +11,18 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from evals.gold_set import load_gold_cases, summarize_routes
 from evals.tracing import span
 from graph.runtime import configure_langsmith, decision_from_state, run_underwrite
 from http_api.deps import SettingsDep
 from http_api.errors import extract_error_message
 from http_api.metrics import METRICS
-from http_api.schemas import UnderwriteRequest, UnderwriteResponse
+from http_api.schemas import (
+    GoldSetCase,
+    GoldSetResponse,
+    UnderwriteRequest,
+    UnderwriteResponse,
+)
 from models import Applicant, EscalationPackage, LoanProgram, SubagentOutput
 
 logger = logging.getLogger(__name__)
@@ -57,6 +63,53 @@ def _coerce(model: type[TModel], value: object) -> TModel:
     if hasattr(value, "model_dump"):
         return model.model_validate(value.model_dump(mode="json"))  # type: ignore[union-attr]
     return model.model_validate(value)
+
+
+@router.get("/gold-set", response_model=GoldSetResponse)
+def gold_set() -> GoldSetResponse:
+    """Labeled gold-set catalog for the underwrite playground queue."""
+    try:
+        cases = load_gold_cases()
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    rows = [
+        GoldSetCase(
+            case_id=case.case_id,
+            applicant_id=case.applicant.applicant_id,
+            business_name=case.applicant.business_name,
+            industry=case.applicant.industry,
+            annual_revenue=case.applicant.annual_revenue,
+            requested_loan_amount=case.applicant.requested_loan_amount,
+            years_in_business=case.applicant.years_in_business,
+            debt_service_coverage_ratio=case.applicant.debt_service_coverage_ratio,
+            credit_score_proxy=case.applicant.credit_score_proxy,
+            sbss_proxy=case.applicant.sbss_proxy,
+            has_bankruptcy=case.applicant.has_bankruptcy,
+            has_severe_fraud_alert=case.applicant.has_severe_fraud_alert,
+            requested_program=(
+                case.applicant.requested_program.value
+                if case.applicant.requested_program
+                else None
+            ),
+            gold_outcome=case.label.outcome.value,
+            gold_risk_tier=case.label.risk_tier.value,
+            gold_program=(
+                case.label.recommended_program
+                if case.label.recommended_program
+                else None
+            ),
+            gold_rationale=case.label.rationale,
+        )
+        for case in cases
+    ]
+    return GoldSetResponse(
+        n_cases=len(rows),
+        counts=summarize_routes(cases),
+        cases=rows,
+    )
 
 
 @router.post("/underwrite", response_model=UnderwriteResponse)

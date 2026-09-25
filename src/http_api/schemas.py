@@ -217,3 +217,31 @@ class UnderwriteResponse(BaseModel):
     subagent_outputs: dict[str, SubagentOutput] = Field(default_factory=dict)
     escalation: EscalationPackage | None = None
     latency_ms: float | None = None
+
+
+class GoldSetCase(BaseModel):
+    """Playground catalog row — gold label plus fields needed to fill the form."""
+
+    case_id: str
+    applicant_id: str
+    business_name: str
+    industry: str
+    annual_revenue: float
+    requested_loan_amount: float
+    years_in_business: float
+    debt_service_coverage_ratio: float | None = None
+    credit_score_proxy: int | None = None
+    sbss_proxy: int | None = None
+    has_bankruptcy: bool = False
+    has_severe_fraud_alert: bool = False
+    requested_program: Literal["sba_7a", "cdfi_direct"] | None = None
+    gold_outcome: Literal["approve", "deny", "escalate"]
+    gold_risk_tier: str
+    gold_program: Literal["sba_7a", "cdfi_direct"] | None = None
+    gold_rationale: str
+
+
+class GoldSetResponse(BaseModel):
+    n_cases: int
+    counts: dict[str, int]
+    cases: list[GoldSetCase]

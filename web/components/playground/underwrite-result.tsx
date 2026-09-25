@@ -2,15 +2,21 @@
 
 import * as React from "react"
 
-import { SourceLink } from "@/components/playground/source-link"
-import { Badge } from "@/components/ui/badge"
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+  CitationChips,
+  CitationDrawer,
+} from "@/components/playground/citation-drawer"
+import { demoSpotlightClass } from "@/components/playground/demo-tour"
+import { HitlBar } from "@/components/playground/hitl-bar"
+import {
+  PolicyResultsTable,
+  buildPolicyRows,
+} from "@/components/playground/policy-results-table"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useGoldSetQuery } from "@/hooks/use-gold-set"
+import { DEMO_STEPS } from "@/lib/demo-tour"
 import {
   formatCurrency,
   formatLender,
@@ -19,7 +25,6 @@ import {
   normalizeRationale,
   outcomeTone,
   parseTraceFacts,
-  type Citation,
   type DecisionRationale,
   type ImprovementAction,
   type ImprovementPriority,
@@ -30,6 +35,7 @@ import {
   type UnderwriteResult,
 } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
+import { useDemoTourStore } from "@/stores/demo-tour-store"
 
 type MetricGaugeProps = {
   label: string
@@ -332,6 +338,19 @@ export function UnderwriteResultView({
   applicant: UnderwriteApplicantPayload | null
   loading?: boolean
 }) {
+  const { catalog } = useGoldSetQuery()
+  const [citationIndex, setCitationIndex] = React.useState<number | null>(null)
+  const tourCitation = useDemoTourStore((s) => s.citationIndex)
+  const clearTourCitation = useDemoTourStore((s) => s.clearCitation)
+  const tourActive = useDemoTourStore((s) => s.active)
+  const tourSpotlight = useDemoTourStore(
+    (s) => DEMO_STEPS[s.stepIndex]?.spotlight
+  )
+
+  React.useEffect(() => {
+    if (tourCitation != null) setCitationIndex(tourCitation)
+  }, [tourCitation])
+
   if (loading && !result) {
     return (
       <div className="space-y-8 p-1">
@@ -357,12 +376,15 @@ export function UnderwriteResultView({
           No decision yet
         </p>
         <p className="mt-1 max-w-md">
-          Fill in the applicant above and run underwrite. The decision stays
-          cached while you navigate the playground.
+          Pick a gold-set case or edit the applicant, then run underwrite. The
+          memo stays cached while you navigate the playground.
         </p>
       </div>
     )
   }
+
+  const gold =
+    catalog?.cases.find((row) => row.case_id === result.case_id) ?? null
 
   const { decision } = result
   const routing = result.program_routing ?? decision.program_routing
@@ -372,6 +394,7 @@ export function UnderwriteResultView({
   const escalationRationale = result.escalation
     ? normalizeRationale(result.escalation.rationale)
     : null
+  const policyRows = buildPolicyRows(result, applicant, gold)
 
   const tone = outcomeTone(decision.outcome)
   const dscr = metrics?.debt_service_coverage ?? null
@@ -426,6 +449,7 @@ export function UnderwriteResultView({
             )}
           />
           Recommendation · {formatStatusLabel(decision.outcome)}
+          {gold ? ` · gold ${formatStatusLabel(gold.gold_outcome)}` : ""}
         </p>
       </header>
 
@@ -505,6 +529,8 @@ export function UnderwriteResultView({
           </div>
         </section>
       ) : null}
+
+      <PolicyResultsTable rows={policyRows} />
 
       <section className="grid gap-8 border-y py-6 sm:grid-cols-3">
         <MetricGauge
@@ -670,8 +696,47 @@ export function UnderwriteResultView({
       ) : null}
 
       {result.citations.length > 0 ? (
-        <CitationsList citations={result.citations} />
+        <section
+          data-demo="citations"
+          className={cn(
+            "space-y-3 border-t pt-6",
+            demoSpotlightClass(tourActive && tourSpotlight === "citations")
+          )}
+        >
+          <div>
+            <p className="text-sm font-semibold tracking-tight">
+              Policy citations
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Open a clause to read the retrieved text and source.
+            </p>
+          </div>
+          <CitationChips
+            citations={result.citations}
+            onSelect={setCitationIndex}
+          />
+        </section>
       ) : null}
+
+      <div
+        data-demo="hitl"
+        className={demoSpotlightClass(tourActive && tourSpotlight === "hitl")}
+      >
+        <HitlBar
+          caseId={result.case_id}
+          agentOutcome={decision.outcome}
+          gold={gold}
+        />
+      </div>
+
+      <CitationDrawer
+        citations={result.citations}
+        openIndex={citationIndex}
+        onOpenChange={(index) => {
+          setCitationIndex(index)
+          if (index == null) clearTourCitation()
+        }}
+      />
     </div>
   )
 }
@@ -740,48 +805,3 @@ function ImprovementActionsView({
   )
 }
 
-function CitationsList({ citations }: { citations: Citation[] }) {
-  const [open, setOpen] = React.useState(true)
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-t pt-6">
-      <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-sm font-semibold tracking-tight">
-        Policy citations
-        <span className="text-xs font-normal text-muted-foreground">
-          {citations.length} · {open ? "Hide" : "Show"}
-        </span>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-3 space-y-2">
-        {citations.map((citation, index) => (
-          <div
-            key={`${citation.clause_id}-${index}`}
-            className="rounded-lg border bg-card px-3 py-2.5"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {citation.clause_id}
-              </Badge>
-              <Badge variant="secondary">
-                {formatProgram(citation.program)}
-              </Badge>
-              <span className="text-[11px] text-muted-foreground tabular-nums">
-                sim {citation.similarity_score.toFixed(2)}
-              </span>
-            </div>
-            <SourceLink
-              href={citation.source.url}
-              className="mt-2 block truncate text-sm"
-            >
-              {citation.source.title || citation.source.name}
-            </SourceLink>
-            {citation.retrieved_text ? (
-              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-                {citation.retrieved_text}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}

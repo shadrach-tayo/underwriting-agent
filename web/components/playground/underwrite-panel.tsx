@@ -4,6 +4,12 @@ import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 
+import {
+  DemoTourCard,
+  DemoTourLauncher,
+  demoSpotlightClass,
+} from "@/components/playground/demo-tour"
+import { GoldSetQueue } from "@/components/playground/gold-set-queue"
 import { UnderwriteResultView } from "@/components/playground/underwrite-result"
 import { Button } from "@/components/ui/button"
 import {
@@ -39,21 +45,32 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useGoldSetQuery } from "@/hooks/use-gold-set"
 import { useUnderwriteQuery } from "@/hooks/use-underwrite"
 import {
   formatIndustryLabel,
   GOLD_SET_INDUSTRIES,
   INELIGIBLE_INDUSTRIES,
 } from "@/lib/industries"
+import { DEMO_STEPS } from "@/lib/demo-tour"
 import { cn } from "@/lib/utils"
+import { useDemoTourStore } from "@/stores/demo-tour-store"
 import { useUnderwriteStore } from "@/stores/underwrite-store"
 
 export function UnderwritePanel() {
   const form = useUnderwriteStore((s) => s.form)
   const formOpen = useUnderwriteStore((s) => s.formOpen)
+  const selectedCaseId = useUnderwriteStore((s) => s.selectedCaseId)
   const updateField = useUnderwriteStore((s) => s.updateField)
   const setFormOpen = useUnderwriteStore((s) => s.setFormOpen)
   const clearResults = useUnderwriteStore((s) => s.clearResults)
+  const recordOutcome = useUnderwriteStore((s) => s.recordOutcome)
+  const loadGoldCase = useUnderwriteStore((s) => s.loadGoldCase)
+  const tourActive = useDemoTourStore((s) => s.active)
+  const tourSpotlight = useDemoTourStore(
+    (s) => DEMO_STEPS[s.stepIndex]?.spotlight
+  )
+  const { catalog } = useGoldSetQuery()
 
   const { result, errorMessage, isRunning, activeRun, run } =
     useUnderwriteQuery()
@@ -68,10 +85,37 @@ export function UnderwritePanel() {
   async function onRun() {
     setLocalError(null)
     try {
-      await run({ force: true })
+      const data = await run({ force: true })
+      const caseId = selectedCaseId ?? data.case_id
+      if (caseId && data.decision?.outcome) {
+        recordOutcome(caseId, data.decision.outcome)
+      }
+      return data
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : String(err))
       setFormOpen(true)
+      throw err
+    }
+  }
+
+  async function onDemoLoadRun(caseId: string) {
+    const row = catalog?.cases.find((item) => item.case_id === caseId)
+    if (!row) {
+      throw new Error(`Demo file ${caseId} is not in the gold-set catalog.`)
+    }
+    loadGoldCase(row)
+    setLocalError(null)
+    try {
+      const data = await run({ force: true })
+      const id = caseId || data.case_id
+      if (id && data.decision?.outcome) {
+        recordOutcome(id, data.decision.outcome)
+      }
+      setFormOpen(false)
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : String(err))
+      setFormOpen(true)
+      throw err
     }
   }
 
@@ -89,16 +133,28 @@ export function UnderwritePanel() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <div className="space-y-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Underwrite
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Submit a synthetic applicant to{" "}
-          <code className="font-mono text-xs">POST /underwrite</code>. Draft
-          form and last run persist across navigation; the decision always
-          reflects the committed request.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            Underwrite
+          </h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Pick a labeled gold-set case or edit the form, then submit to{" "}
+            <code className="font-mono text-xs">POST /underwrite</code>. Draft
+            form and last run persist across navigation; the decision always
+            reflects the committed request.
+          </p>
+        </div>
+        <DemoTourLauncher />
+      </div>
+
+      <div
+        data-demo="queue"
+        className={demoSpotlightClass(
+          tourActive && tourSpotlight === "queue"
+        )}
+      >
+        <GoldSetQueue />
       </div>
 
       <Collapsible open={formOpen} onOpenChange={setFormOpen}>
@@ -396,14 +452,20 @@ export function UnderwritePanel() {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="font-heading text-lg font-semibold tracking-tight">
-            Decision
+            Credit memo
           </h2>
           <p className="text-sm text-muted-foreground">
-            Recommendation, routing gates, gauges, and structured rationale from
-            the LangGraph run.
+            Agent recommendation, policy table, citations, and the officer call
+            recorded against this file.
           </p>
         </div>
-        <div className="rounded-2xl border bg-card px-5 py-6 sm:px-8 sm:py-8">
+        <div
+          data-demo="memo"
+          className={cn(
+            "rounded-2xl border bg-card px-5 py-6 sm:px-8 sm:py-8",
+            demoSpotlightClass(tourActive && tourSpotlight === "memo")
+          )}
+        >
           <UnderwriteResultView
             result={result}
             applicant={activeRun?.applicant ?? null}
@@ -411,6 +473,8 @@ export function UnderwritePanel() {
           />
         </div>
       </section>
+
+      <DemoTourCard onLoadRun={onDemoLoadRun} />
     </div>
   )
 }

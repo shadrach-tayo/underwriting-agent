@@ -33,6 +33,7 @@ export type UnderwriteForm = {
 }
 
 export type UnderwriteApplicantPayload = {
+  applicant_id?: string | null
   business_name: string
   industry: string
   annual_revenue: number
@@ -50,6 +51,33 @@ export type UnderwriteApplicantPayload = {
 
 export type UnderwriteRequestParams = {
   applicant: UnderwriteApplicantPayload
+  case_id?: string | null
+}
+
+export type GoldSetCase = {
+  case_id: string
+  applicant_id: string
+  business_name: string
+  industry: string
+  annual_revenue: number
+  requested_loan_amount: number
+  years_in_business: number
+  debt_service_coverage_ratio: number | null
+  credit_score_proxy: number | null
+  sbss_proxy: number | null
+  has_bankruptcy: boolean
+  has_severe_fraud_alert: boolean
+  requested_program: LoanProgram | null
+  gold_outcome: DecisionOutcome
+  gold_risk_tier: string
+  gold_program: LoanProgram | null
+  gold_rationale: string
+}
+
+export type GoldSetResponse = {
+  n_cases: number
+  counts: Record<string, number>
+  cases: GoldSetCase[]
 }
 
 export type RationaleFactTone = "pass" | "fail" | "warn" | "neutral" | "info"
@@ -197,6 +225,7 @@ export type UnderwriteResult = {
 
 export const underwriteKeys = {
   all: ["underwrite"] as const,
+  goldSet: () => [...underwriteKeys.all, "gold-set"] as const,
   runs: () => [...underwriteKeys.all, "run"] as const,
   run: (params: UnderwriteRequestParams) =>
     [...underwriteKeys.runs(), params] as const,
@@ -210,7 +239,8 @@ function toNumber(value: string): number | null {
 }
 
 export function buildUnderwritePayload(
-  form: UnderwriteForm
+  form: UnderwriteForm,
+  extras?: { case_id?: string | null; applicant_id?: string | null }
 ): UnderwriteRequestParams {
   const annual_revenue = toNumber(form.annual_revenue)
   const requested_loan_amount = toNumber(form.requested_loan_amount)
@@ -225,7 +255,9 @@ export function buildUnderwritePayload(
     )
   }
   return {
+    case_id: extras?.case_id || undefined,
     applicant: {
+      applicant_id: extras?.applicant_id || undefined,
       business_name: form.business_name.trim(),
       industry: form.industry.trim(),
       annual_revenue,
@@ -241,6 +273,69 @@ export function buildUnderwritePayload(
       notes: form.notes.trim() || null,
     },
   }
+}
+
+/** Tenure the way a lender says it: "8-year", "7-month". */
+export function formatTenureLabel(years: number | null | undefined): string {
+  if (years == null || !Number.isFinite(years)) return "operating"
+  if (years < 1) {
+    const months = Math.max(1, Math.round(years * 12))
+    return `${months}-month`
+  }
+  const rounded = Number.isInteger(years)
+    ? String(years)
+    : years.toFixed(1).replace(/\.0$/, "")
+  return `${rounded}-year`
+}
+
+/** File note a lender would write — not a gold-set catalog id. */
+export function describeGoldCase(row: GoldSetCase): string {
+  const tenure = formatTenureLabel(row.years_in_business)
+  const industry = row.industry.trim()
+  const amount = formatCurrency(row.requested_loan_amount)
+  const product = row.requested_program
+    ? ` ${formatProgram(row.requested_program)}`
+    : ""
+  const bits = [
+    `${tenure} ${industry} firm seeking ${amount}${product}.`,
+    `Revenue ${formatCurrency(row.annual_revenue)}.`,
+  ]
+  if (row.debt_service_coverage_ratio != null) {
+    bits.push(`DSCR ${row.debt_service_coverage_ratio.toFixed(2)}x.`)
+  }
+  if (row.has_bankruptcy) bits.push("Prior bankruptcy on file.")
+  if (row.has_severe_fraud_alert) bits.push("Severe fraud alert on file.")
+  return bits.join(" ")
+}
+
+export function goldCaseToForm(row: GoldSetCase): UnderwriteForm {
+  return {
+    business_name: row.business_name,
+    industry: row.industry,
+    annual_revenue: String(row.annual_revenue),
+    requested_loan_amount: String(row.requested_loan_amount),
+    years_in_business: String(row.years_in_business),
+    debt_service_coverage_ratio:
+      row.debt_service_coverage_ratio == null
+        ? ""
+        : String(row.debt_service_coverage_ratio),
+    credit_score_proxy:
+      row.credit_score_proxy == null ? "" : String(row.credit_score_proxy),
+    sbss_proxy: row.sbss_proxy == null ? "" : String(row.sbss_proxy),
+    requested_program: row.requested_program ?? "",
+    lender_id: "",
+    has_bankruptcy: row.has_bankruptcy,
+    has_severe_fraud_alert: row.has_severe_fraud_alert,
+    notes: describeGoldCase(row),
+  }
+}
+
+export async function fetchGoldSet(): Promise<GoldSetResponse> {
+  const res = await fetch(`${apiBase()}/gold-set`)
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Gold set failed"))
+  }
+  return (await res.json()) as GoldSetResponse
 }
 
 export async function runUnderwrite(
