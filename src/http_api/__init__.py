@@ -5,11 +5,14 @@ from __future__ import annotations
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from config import get_settings
 from http_api.admin import router as admin_rag_router
 from http_api.db import ping_database
 from http_api.metrics import METRICS
+from http_api.middleware import PrometheusHttpMiddleware, RequestIdMiddleware
+from http_api.prometheus import PROMETHEUS_CONTENT_TYPE, render_prometheus
 from http_api.rag import router as rag_router
 from http_api.schemas import HealthResponse, MetricsResponse, ReadyResponse
 from http_api.underwrite import router as underwrite_router
@@ -38,6 +41,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Last added runs first. Request ID should wrap the handler before metrics.
+    application.add_middleware(PrometheusHttpMiddleware)
+    application.add_middleware(RequestIdMiddleware)
     application.include_router(admin_rag_router)
     application.include_router(rag_router)
     application.include_router(underwrite_router)
@@ -60,8 +66,13 @@ def create_app() -> FastAPI:
 
     @application.get("/metrics", response_model=MetricsResponse)
     def metrics() -> MetricsResponse:
-        """Decisions/day, escalation rate, latency p50/p95 (process-local)."""
+        """Decisions/day, escalation rate, latency p50/p95 (process-local JSON)."""
         return MetricsResponse.model_validate(METRICS.snapshot())
+
+    @application.get("/prometheus")
+    def prometheus() -> Response:
+        """Prometheus text exposition for scrapes (Grafana / prometheus)."""
+        return Response(content=render_prometheus(), media_type=PROMETHEUS_CONTENT_TYPE)
 
     return application
 

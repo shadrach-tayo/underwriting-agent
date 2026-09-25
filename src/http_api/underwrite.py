@@ -8,7 +8,7 @@ import time
 from typing import TypeVar
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from evals.gold_set import load_gold_cases, summarize_routes
@@ -113,10 +113,13 @@ def gold_set() -> GoldSetResponse:
 
 
 @router.post("/underwrite", response_model=UnderwriteResponse)
-def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResponse:
+def underwrite(
+    body: UnderwriteRequest, settings: SettingsDep, request: Request
+) -> UnderwriteResponse:
     """Run the underwriting graph on a synthetic applicant."""
     configure_langsmith(settings)
     applicant = _applicant_from_request(body)
+    request_id = getattr(request.state, "request_id", None)
 
     with span("http.underwrite") as current:
         if current is not None:
@@ -141,6 +144,7 @@ def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResp
                 json.dumps(
                     {
                         "event": "underwrite.error",
+                        "request_id": request_id,
                         "applicant_id": applicant.applicant_id,
                         "latency_ms": round(elapsed_ms, 2),
                         "error": extract_error_message(exc),
@@ -185,6 +189,7 @@ def underwrite(body: UnderwriteRequest, settings: SettingsDep) -> UnderwriteResp
             json.dumps(
                 {
                     "event": "underwrite.decision",
+                    "request_id": request_id,
                     "case_id": response.case_id,
                     "outcome": decision.outcome.value,
                     "latency_ms": round(elapsed_ms, 2),

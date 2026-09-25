@@ -19,6 +19,7 @@ dependencies = [
     "langgraph>=1.2.9",
     "langsmith>=0.10.9",
     "pgvector>=0.2.5,<0.4",
+    "prometheus-client>=0.25.0",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",

@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Local `uv run underwriting-api` on the host.
+  - job_name: underwriting-api-host
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  # Compose `--profile api` service (down when that profile is off).
+  - job_name: underwriting-api
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["api:8080"]

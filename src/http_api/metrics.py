@@ -9,6 +9,8 @@ from datetime import date, datetime, timezone
 from statistics import quantiles
 from typing import Any
 
+from http_api.prometheus import observe_underwrite
+
 
 def _utc_today() -> date:
     return datetime.now(timezone.utc).date()
@@ -54,9 +56,12 @@ class UnderwriteMetrics:
             self._roll_day_locked()
             if error:
                 self._errors += 1
-                return
-            self._outcomes[outcome] += 1
-            self._latencies_ms.append(float(latency_ms))
+            else:
+                self._outcomes[outcome] += 1
+                self._latencies_ms.append(float(latency_ms))
+        observe_underwrite(
+            outcome=outcome, latency_ms=latency_ms, error=error
+        )
 
     def reset(self) -> None:
         with self._lock:

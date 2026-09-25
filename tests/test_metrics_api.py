@@ -78,3 +78,21 @@ def test_metrics_records_underwrite_outcomes() -> None:
     assert metrics["escalation_rate"] == 1.0
     assert metrics["latency_ms"]["count"] >= 1
     assert metrics["latency_ms"]["p50"] is not None
+
+    prom = client.get("/prometheus")
+    assert prom.status_code == 200
+    assert "text/plain" in prom.headers["content-type"]
+    body = prom.text
+    assert "underwrite_decisions_total" in body
+    assert 'outcome="escalate"' in body
+    assert "http_requests_total" in body
+
+
+def test_request_id_is_echoed() -> None:
+    client = TestClient(create_app())
+    res = client.get("/health", headers={"X-Request-ID": "demo-trace-1"})
+    assert res.status_code == 200
+    assert res.headers["X-Request-ID"] == "demo-trace-1"
+
+    minted = client.get("/health")
+    assert minted.headers.get("X-Request-ID")

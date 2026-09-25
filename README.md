@@ -14,11 +14,11 @@ Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roa
 | API | FastAPI |
 | MCP | FastMCP (stub tools under `src/mcp_server`) |
 | Evals | DeepEval + Braintrust (+ RAGAS when importable) |
-| Observability | Braintrust (evals) + LangSmith (LangGraph) + `GET /metrics` |
+| Observability | Braintrust (evals) + LangSmith (LangGraph) + Prometheus / Grafana |
 | Package / env | **uv** (`.venv`) |
 | Web UI | Next.js + shadcn (`web/`) |
 | CI | GitHub Actions — pytest + false-approve hard gate |
-| Metrics | `GET /metrics` + Admin card (decisions/day, escalation rate, latency p50/p95) |
+| Metrics | `GET /metrics` (JSON) + `GET /prometheus` + Grafana on :3300 |
 
 ## Eval snapshot (Week 4)
 
@@ -51,7 +51,9 @@ data/
   policy_sources/ # Public policy docs (Week 1)
   gold_set/       # Labeled synthetic applicants (Week 1)
   lenders/        # Lender offer-matrix overlays
-docs/             # System design + RUNBOOK.md
+docs/             # System design + RUNBOOK + OBSERVABILITY
+prometheus/       # scrape config (profile: observability)
+grafana/          # provisioned Underwriting API dashboard
 terraform/        # AWS ECS + RDS (Week 5)
 tests/
 .github/workflows/ci.yml
@@ -101,7 +103,12 @@ docker run --rm -p 8080:8080 --env-file .env \
 
 # or compose profile (wires Postgres hostname automatically):
 docker compose --profile api up -d --build api
+
+# Prometheus :9090 + Grafana :3300 (scrapes GET /prometheus)
+docker compose --profile observability up -d
 ```
+
+Ops notes for traces vs scrapes: [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md).
 
 ### Local LangGraph + LangSmith
 

@@ -9,7 +9,8 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 | Postgres + pgvector | `docker compose up -d postgres` | `pg_isready` via compose healthcheck |
 | API | `uv run underwriting-api` or `docker compose --profile api up -d --build api` | `GET /health` → `{ "status": "ok" }` |
 | Readiness | depends on Postgres | `GET /ready` → `ready` / `not_ready` |
-| Metrics | process-local counters | `GET /metrics` → decisions/day, escalation rate, latency p50/p95 |
+| Metrics | process-local JSON + Prometheus | `GET /metrics` (Admin) · `GET /prometheus` (scrape) |
+| Grafana | `docker compose --profile observability up -d` | http://127.0.0.1:3300 (admin/admin) |
 | Web console | `cd web && pnpm dev` | Admin shows metrics + RAG status |
 | Eval suite | `uv run underwriting-evals --mode graph --fail-on-gate` | hard gate = false-approve rate == 0 |
 
@@ -43,6 +44,7 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 curl -s http://127.0.0.1:8080/health
 curl -s http://127.0.0.1:8080/ready
 curl -s http://127.0.0.1:8080/metrics
+curl -s http://127.0.0.1:8080/prometheus | head
 curl -sN -X POST http://127.0.0.1:8080/rag/ask/stream \
   -H 'Content-Type: application/json' \
   -d '{"query":"What SBSS score is required for SBA 7(a)?"}'
