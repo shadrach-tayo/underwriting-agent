@@ -2,8 +2,6 @@
 
 Agentic underwriting for SME loans: auto-decide inside a defined confidence and risk envelope, escalate everything else with a citation-grounded reasoning trace. A **hard-coded risk ceiling** in application code prevents any case above threshold from being auto-approved, regardless of model confidence.
 
-Build tracker: open [`underwriting-agent-roadmap.html`](./underwriting-agent-roadmap.html) in a browser.
-
 ## Stack
 
 | Layer | Choice |
@@ -132,11 +130,7 @@ Graph ID: `underwriting` → `src/graph/__init__.py:graph`
 
 ## Hard-coded risk ceiling
 
-`RISK_CEILING` (default `0.75`) is enforced in `graph.apply_risk_ceiling` — not in prompts. Cases at or above the ceiling always escalate. Prompt-injection bypass tests land in Week 2 Day 3.
-
-## Roadmap pace
-
-Week 1–3 foundations + RAG are in place. **Week 4** focuses on eval gates, containerization, and the runbook. Week 5 is AWS deploy + demo.
+`RISK_CEILING` (default `0.75`) is enforced in `graph.apply_risk_ceiling` — not in prompts. Cases at or above the ceiling always escalate.
 
 ## License
 
