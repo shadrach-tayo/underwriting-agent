@@ -46,6 +46,10 @@ def _label_applicant(applicant: Applicant, *, tags: list[str], rationale: str, r
     elif not eligibility_ok:
         outcome = DecisionOutcome.DENY
         risk = RiskTier.HIGH
+    elif routing.ineligible_reasons.get("lender_program_mismatch"):
+        # Lender × program mismatch is a human-review escalate, matching the policy subagent.
+        outcome = DecisionOutcome.ESCALATE
+        risk = RiskTier.MEDIUM
     elif not eligible:
         # Clear program miss but not fraud — deny with adverse action, or escalate if thin-file edge.
         if applicant.metadata.get("borderline"):
@@ -97,7 +101,7 @@ def _case(
 
 
 def build_cases() -> list[GoldCase]:
-    """Hand-tuned cohort covering routing + outcome strata (~40 cases)."""
+    """Hand-tuned cohort covering routing + outcome strata (42 cases)."""
     cases: list[GoldCase] = []
 
     # --- Clear SBA 7(a) + CDFI (both) — approve ---
@@ -825,6 +829,59 @@ def build_cases() -> list[GoldCase]:
                 refs=list(t["refs"]),
             )
         )
+
+    # Lender × program mismatches (registry stubs; no local corpus required).
+    accion_mismatch = _case(
+        "gold-041",
+        applicant=Applicant(
+            applicant_id="A-041",
+            business_name="Mismatch Accion CDFI Probe",
+            industry="wholesale trade",
+            annual_revenue=500_000,
+            requested_loan_amount=150_000,
+            years_in_business=5,
+            debt_service_coverage_ratio=1.4,
+            credit_score_proxy=700,
+            sbss_proxy=180,
+            requested_program=LoanProgram.CDFI_DIRECT,
+            lender_id="accion",
+            metadata={"adversarial": "lender_program_mismatch"},
+        ),
+        tags=["adversarial_lender_mismatch"],
+        rationale=(
+            "Accion originates SBA 7(a) only; CDFI Direct request is a "
+            "lender×program mismatch → escalate."
+        ),
+        refs=["lender_program_mismatch", "accion"],
+    )
+    accion_mismatch.metadata = {"lender_id": "accion"}
+    cases.append(accion_mismatch)
+
+    frontier_mismatch = _case(
+        "gold-042",
+        applicant=Applicant(
+            applicant_id="A-042",
+            business_name="Mismatch Frontier CDFI Probe",
+            industry="retail trade",
+            annual_revenue=200_000,
+            requested_loan_amount=60_000,
+            years_in_business=3,
+            debt_service_coverage_ratio=1.3,
+            credit_score_proxy=650,
+            sbss_proxy=170,
+            requested_program=LoanProgram.CDFI_DIRECT,
+            lender_id="frontier_7a",
+            metadata={"adversarial": "lender_program_mismatch"},
+        ),
+        tags=["adversarial_lender_mismatch"],
+        rationale=(
+            "Frontier 7(a) does not originate CDFI Direct; "
+            "lender×program mismatch → escalate."
+        ),
+        refs=["lender_program_mismatch", "frontier_7a"],
+    )
+    frontier_mismatch.metadata = {"lender_id": "frontier_7a"}
+    cases.append(frontier_mismatch)
 
     return cases
 

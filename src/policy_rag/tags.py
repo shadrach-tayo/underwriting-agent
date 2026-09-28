@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from models import PolicyLayer
-from policy_rag.catalog import lookup_source, program_for_file
+from policy_rag.catalog import SourceCatalogEntry, lookup_source, program_for_file
 
 # SBA SOP passages that encode the shared categorical eligibility gate.
 # Only applied to *generic* SBA SOP sources — not lender overlays.
@@ -37,12 +37,20 @@ def resolve_program(source_name: str, text: str = "") -> PolicyLayer:
             default = PolicyLayer.CDFI_DIRECT
 
     # Lender overlays keep their product program tag (do not promote to shared gate).
-    if entry is not None and entry.lender_id:
+    # Filename check covers checkouts where ``catalog.json`` is not present.
+    if _is_lender_overlay(source_name, entry):
         return default
 
     if default == PolicyLayer.SBA_7A and text and _looks_like_eligibility_gate(text):
         return PolicyLayer.ELIGIBILITY_GATE
     return default
+
+
+def _is_lender_overlay(source_name: str, entry: SourceCatalogEntry | None) -> bool:
+    if entry is not None and entry.lender_id:
+        return True
+    name = source_name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return name.startswith("policy_") or "accion" in name
 
 
 def _looks_like_eligibility_gate(text: str) -> bool:

@@ -28,6 +28,24 @@ _FALLBACK = (
     },
 )
 
+# Accion product band from the lender policy extract. Used when
+# ``data/lenders/accion.json`` is absent (the local corpus is not published).
+_FALLBACK_RULES: dict[str, dict[str, object]] = {
+    LENDER_ACCION: {
+        "loan_amount_min": 100_000.0,
+        "loan_amount_max": 350_000.0,
+        "requires_us_citizen": True,
+        "excluded_states": [
+            "Maryland",
+            "Montana",
+            "North Dakota",
+            "South Dakota",
+            "Tennessee",
+            "Vermont",
+        ],
+    },
+}
+
 
 @dataclass(frozen=True)
 class LenderProfile:
@@ -116,13 +134,25 @@ def format_lender_label(lender_id: str | None) -> str:
     return profile.display_name if profile else lender_id
 
 
+def _copy_overlay(raw: dict[str, object]) -> dict[str, object]:
+    out = dict(raw)
+    states = out.get("excluded_states")
+    if isinstance(states, list):
+        out["excluded_states"] = list(states)
+    return out
+
+
 def lender_rule_overlay(lender_id: str | None) -> dict[str, object]:
-    """Structured overlays from ``data/lenders/{id}.json`` (ingest-extracted)."""
+    """Structured overlays from ``data/lenders/{id}.json`` (ingest-extracted).
+
+    Falls back to built-in Accion rules when the local lender file is missing.
+    """
     if not lender_id:
         return {}
     cfg = load_lender_config(lender_id)
     if cfg is None:
-        return {}
+        fallback = _FALLBACK_RULES.get(lender_id)
+        return _copy_overlay(fallback) if fallback is not None else {}
     return {
         "loan_amount_min": cfg.rules.loan_amount_min,
         "loan_amount_max": cfg.rules.loan_amount_max,
