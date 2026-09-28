@@ -45,14 +45,11 @@ src/
   models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
 web/              # Next.js console — Admin (RAG) + Playground (agents)
-data/
-  policy_sources/ # Public policy docs (Week 1)
-  gold_set/       # Labeled synthetic applicants (Week 1)
-  lenders/        # Lender offer-matrix overlays
+data/             # Local only (gitignored) — policy PDFs, gold set, lenders
 docs/             # System design + RUNBOOK + OBSERVABILITY
 prometheus/       # scrape config (profile: observability)
 grafana/          # provisioned Underwriting API dashboard
-terraform/        # AWS ECS + RDS (Week 5)
+terraform/        # AWS ECS + RDS (configured, not applied — demo is local)
 tests/
 .github/workflows/ci.yml
 Dockerfile
@@ -65,6 +62,11 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
 ```bash
 # Install deps into project .venv (created automatically)
 uv sync
+
+# Gold set JSONL is local-only; regenerate if data/gold_set/applicants.jsonl is missing
+uv run underwriting-gold-set
+
+# Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 
 # Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 cp .env.example .env
@@ -127,6 +129,10 @@ uv run langgraph dev --no-browser
 Graph ID: `underwriting` → `src/graph/__init__.py:graph`
 
 `langchain-community` is pinned for RAGAS compatibility where needed. Revisit pins when upgrading evals.
+
+## AWS (not deployed)
+
+Terraform under [`terraform/`](./terraform/) describes ECS Fargate + RDS Postgres/pgvector + an ALB. **Do not apply it for the current demo** — run Postgres, the API, and the playground locally (see Setup). Grafana stays on compose profile `observability`.
 
 ## Hard-coded risk ceiling
 

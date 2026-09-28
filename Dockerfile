@@ -20,6 +20,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
+# data/ is gitignored; docker build uses the local tree (gold set, policy PDFs).
 COPY data ./data
 
 RUN uv sync --frozen --no-dev

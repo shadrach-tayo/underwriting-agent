@@ -32,6 +32,12 @@ not a side effect of picking a conflicting clause.
 
 ## Run the suite
 
+Gold-set JSONL is local-only (`data/gold_set/` is gitignored). Generate it first:
+
+```bash
+uv run underwriting-gold-set
+```
+
 ```bash
 # Harness smoke (oracle = replay gold labels — proves metrics/gates)
 uv run underwriting-evals --mode oracle

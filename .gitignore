@@ -25,8 +25,9 @@ htmlcov/
 .vscode/
 .DS_Store
 
-# Data artifacts (keep source trees; ignore large generated blobs)
-data/gold_set/*.parquet
+# Local corpus — policy PDFs, gold set, lender overlays (not published)
+/data/*
+!/data/README.md
 data/embeddings/
 
 # Frontend (Next.js)
