@@ -67,8 +67,6 @@ uv sync
 uv run underwriting-gold-set
 
 # Copy env template and fill keys (LangSmith + Anthropic for local agent work)
-
-# Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 cp .env.example .env
 
 # Postgres + pgvector for RAG (policy ingest / retrieve)

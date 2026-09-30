@@ -13,6 +13,7 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 | Grafana | `docker compose --profile observability up -d` | http://127.0.0.1:3300 (admin/admin) |
 | Web console | `cd web && pnpm dev` | Admin shows metrics + RAG status |
 | Eval suite | `uv run underwriting-evals --mode graph --fail-on-gate` | hard gate = false-approve rate == 0 |
+| AWS (ECS + RDS) | Terraform in `terraform/` — **do not apply for the local demo** | see [`terraform/README.md`](../terraform/README.md) |
 
 ## If the LLM / embedding provider is down
 

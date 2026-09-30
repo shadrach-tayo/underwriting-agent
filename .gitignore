@@ -30,6 +30,10 @@ htmlcov/
 !/data/README.md
 data/embeddings/
 
+# Local demo recording (not published)
+docs/*.mp4
+docs/*.mov
+
 # Frontend (Next.js)
 web/node_modules/
 web/.next/

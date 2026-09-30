@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars (gitignored) only when you intend to apply.
+# Do not apply for the local playground demo.
+
+aws_region   = "us-east-1"
+project_name = "underwriting"
+azs          = ["us-east-1a", "us-east-1b"]
+
+# Leave 0 so an accidental apply does not start Fargate tasks.
+desired_count = 0
+image_tag     = "latest"
+
+cors_origins = "http://localhost:3000,http://127.0.0.1:3000"
+
+# Fill before the first real apply. Never commit the filled file.
+anthropic_api_key = ""
+voyage_api_key    = ""
+deepseek_api_key  = ""
+openai_api_key    = ""
+langsmith_api_key = ""
+# admin_api_key   = ""  # omit to generate one
+# acm_certificate_arn = ""
