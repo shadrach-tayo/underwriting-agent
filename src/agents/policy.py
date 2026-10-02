@@ -12,7 +12,11 @@ from models import (
     SubagentName,
     SubagentOutput,
 )
-from retries import classify_provider_error
+from retries import (
+    DatabaseUnavailableError,
+    classify_provider_error,
+    is_database_unavailable,
+)
 from subagent_state import SubagentState
 
 logger = logging.getLogger(__name__)
@@ -87,7 +91,12 @@ def _retrieve_citations_once(applicant: Applicant) -> list[Citation]:
             include_shared_layers=True,
         )
         return ensure_regulatory_citations(scoped, pool)
+    except DatabaseUnavailableError:
+        raise
     except Exception as exc:  # noqa: BLE001
+        if is_database_unavailable(exc):
+            logger.exception("Policy database unreachable")
+            raise DatabaseUnavailableError() from exc
         wrapped = classify_provider_error(exc)
         if wrapped is exc:
             raise
@@ -117,8 +126,25 @@ def run_policy_subagent(state: SubagentState) -> SubagentOutput:
     routing = compute_program_routing(applicant)
     try:
         citations = _retrieve_citations(applicant, reuse=reuse)
-    except Exception as exc:  # noqa: BLE001
+    except DatabaseUnavailableError:
         if _has_deterministic_outcome(applicant, routing):
+            logger.warning(
+                "Policy database unreachable on deterministic path; continuing"
+            )
+            citations = []
+        else:
+            raise
+    except Exception as exc:  # noqa: BLE001
+        if is_database_unavailable(exc):
+            if _has_deterministic_outcome(applicant, routing):
+                logger.warning(
+                    "Policy database unreachable on deterministic path; continuing"
+                )
+                citations = []
+            else:
+                logger.exception("Policy database unreachable")
+                raise DatabaseUnavailableError() from exc
+        elif _has_deterministic_outcome(applicant, routing):
             logger.warning(
                 "Policy RAG retrieve failed on deterministic path (%s); continuing",
                 exc,

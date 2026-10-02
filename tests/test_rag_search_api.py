@@ -32,6 +32,25 @@ def _cite(text: str, program: PolicyLayer, *, url: str | None = "https://example
     )
 
 
+def test_rag_search_database_outage_returns_503() -> None:
+    pipeline = MagicMock()
+    pipeline.retrieve.side_effect = RuntimeError(
+        '(psycopg.OperationalError) connection failed: connection to server at "127.0.0.1", '
+        "port 54326 failed: Connection refused "
+        "(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+    )
+
+    with patch("http_api.rag.get_policy_pipeline", return_value=pipeline):
+        client = TestClient(create_app())
+        res = client.post("/rag/search", json={"query": "SBSS score", "top_k": 3})
+
+    assert res.status_code == 503
+    detail = res.json()["detail"]
+    assert "Postgres" in detail
+    assert "54326" not in detail
+    assert "sqlalche.me" not in detail
+
+
 def test_rag_search_provider_error_returns_502_without_app_retry() -> None:
     pipeline = MagicMock()
     pipeline.retrieve.side_effect = ConnectionError("voyage down")

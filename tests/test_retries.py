@@ -18,10 +18,13 @@ from models import (
     SubagentOutput,
 )
 from retries import (
+    DATABASE_UNAVAILABLE_MESSAGE,
+    DatabaseUnavailableError,
     ProviderOutageError,
     RetryableProviderError,
     call_with_retry,
     classify_provider_error,
+    is_database_unavailable,
     is_fatal_provider_error,
     is_retryable,
     should_retry_node,
@@ -184,6 +187,48 @@ def test_graph_quota_fail_closed_without_retry() -> None:
     assert calls["n"] == 1
     assert result["decision"].outcome == DecisionOutcome.ESCALATE
     assert result.get("provider_outage") is True
+
+
+class _PsycopgOperationalError(Exception):
+    """Stand-in for psycopg.OperationalError without requiring a live driver."""
+
+
+_PsycopgOperationalError.__module__ = "psycopg"
+
+
+def _db_down(*_args: object, **_kwargs: object) -> None:
+    raise _PsycopgOperationalError(
+        'connection failed: connection to server at "127.0.0.1", port 54326 failed: '
+        "Connection refused"
+    )
+
+
+def test_database_outage_is_not_a_provider_retry() -> None:
+    with pytest.raises(_PsycopgOperationalError) as raised:
+        _db_down()
+    exc = raised.value
+    assert is_database_unavailable(exc)
+    assert not is_retryable(exc)
+    assert classify_provider_error(exc) is exc
+    assert not is_database_unavailable(ConnectionError("voyage down"))
+
+
+def test_graph_database_outage_is_not_a_decision() -> None:
+    g = build_graph()
+    with (
+        patch("agents.policy._retrieve_citations_once", side_effect=_db_down),
+        pytest.raises(DatabaseUnavailableError, match="Policy database is unreachable"),
+    ):
+        g.invoke({"applicant": _applicant()})
+
+
+def test_graph_hard_reject_survives_database_outage() -> None:
+    g = build_graph()
+    with patch("agents.policy._retrieve_citations_once", side_effect=_db_down):
+        result = g.invoke({"applicant": _applicant(has_bankruptcy=True)})
+    assert result["decision"].outcome == DecisionOutcome.DENY
+    assert DATABASE_UNAVAILABLE_MESSAGE not in result["decision"].rationale.text
+    assert "54326" not in result["decision"].rationale.text
 
 
 def test_graph_hard_reject_survives_retrieval_outage() -> None:

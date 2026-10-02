@@ -6,11 +6,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from http_api.db import index_stats, ping_database
-from http_api.deps import SettingsDep, require_admin
-from http_api.schemas import IngestRequest, IngestResponse, RagStatusResponse
 from config import IngestTarget
 from evals.tracing import span
+from http_api.db import index_stats, ping_database
+from http_api.deps import SettingsDep, require_admin
+from http_api.errors import public_dependency_error
+from http_api.schemas import IngestRequest, IngestResponse, RagStatusResponse
 from policy_rag.ingest import (
     IngestResult,
     ingest_policy_sources,
@@ -129,12 +130,12 @@ def _rag_ingest_impl(body: IngestRequest, settings: SettingsDep) -> IngestRespon
         result: IngestResult = ingest_policy_sources(targets=targets, index_name=index_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — surface ingest failures as 502
+    except Exception as exc:  # noqa: BLE001 — surface ingest failures as 502/503
         logger.exception("Policy ingest failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Ingest failed: {exc}",
-        ) from exc
+        status_code, detail = public_dependency_error(exc)
+        if status_code == status.HTTP_502_BAD_GATEWAY:
+            detail = f"Ingest failed: {detail}"
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
     return IngestResponse(
         status="ok",

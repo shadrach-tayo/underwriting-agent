@@ -56,6 +56,60 @@ class ProviderOutageError(RetryableProviderError):
     """Provider call failed after the SDK (or a non-SDK helper) gave up."""
 
 
+DATABASE_UNAVAILABLE_MESSAGE = (
+    "Policy database is unreachable. Check that Postgres is running, then retry."
+)
+
+_DB_ERROR_NAMES = frozenset(
+    {
+        "OperationalError",
+        "InterfaceError",
+        "CannotConnectNow",
+        "ConnectionTimeout",
+        "AdminShutdown",
+    }
+)
+_DB_MODULES = ("psycopg", "sqlalchemy", "asyncpg", "pg8000")
+
+
+class DatabaseUnavailableError(Exception):
+    """Postgres could not be reached. The message is safe to show to users."""
+
+    def __init__(self, message: str = DATABASE_UNAVAILABLE_MESSAGE) -> None:
+        super().__init__(message)
+
+
+def database_outage_text(text: str) -> bool:
+    """True when a string is a driver dump from a failed Postgres connection."""
+    lowered = text.lower()
+    if "sqlalche.me/e/20/e3q8" in lowered:
+        return True
+    if "could not connect to server" in lowered:
+        return True
+    if "the database system is starting up" in lowered:
+        return True
+    if "the database system is shutting down" in lowered:
+        return True
+    return "connection to server at" in lowered and (
+        "connection refused" in lowered or "connection failed" in lowered
+    )
+
+
+def is_database_unavailable(exc: BaseException) -> bool:
+    """True for Postgres connect failures, not generic HTTP/provider errors."""
+    if isinstance(exc, DatabaseUnavailableError):
+        return True
+    for item in _walk_exceptions(exc):
+        module = type(item).__module__.lower()
+        if type(item).__name__ in _DB_ERROR_NAMES and any(
+            token in module for token in _DB_MODULES
+        ):
+            return True
+        if database_outage_text(str(item)):
+            return True
+    return False
+
+
 def _under_pytest() -> bool:
     return bool(os.environ.get("PYTEST_CURRENT_TEST"))
 

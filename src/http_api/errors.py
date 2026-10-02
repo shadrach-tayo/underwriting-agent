@@ -6,12 +6,29 @@ import json
 import re
 from typing import Any
 
+from retries import (
+    DATABASE_UNAVAILABLE_MESSAGE,
+    database_outage_text,
+    is_database_unavailable,
+)
+
+
+def public_dependency_error(exc: BaseException) -> tuple[int, str]:
+    """HTTP status and user-facing detail for a failed downstream call."""
+    if is_database_unavailable(exc):
+        return 503, DATABASE_UNAVAILABLE_MESSAGE
+    return 502, extract_error_message(exc)
+
 
 def extract_error_message(exc: BaseException | str) -> str:
     """Pull the innermost human message out of OpenAI/DeepSeek-style errors."""
+    if not isinstance(exc, str) and is_database_unavailable(exc):
+        return DATABASE_UNAVAILABLE_MESSAGE
     text = str(exc).strip()
     if not text:
         return "Unknown error"
+    if database_outage_text(text):
+        return DATABASE_UNAVAILABLE_MESSAGE
 
     # OpenAI SDK: Error code: 429 - {'error': {'message': '...', ...}}
     dict_match = re.search(r"(\{[^{}]*'error'[^{}]*\{.*?\}.*\})", text, re.DOTALL)

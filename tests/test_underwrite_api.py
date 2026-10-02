@@ -21,6 +21,7 @@ from models import (
     SubagentName,
     SubagentOutput,
 )
+from retries import DATABASE_UNAVAILABLE_MESSAGE, DatabaseUnavailableError
 
 
 def _decision() -> Decision:
@@ -132,3 +133,29 @@ def test_underwrite_accepts_lender_id() -> None:
     applicant = mocked.call_args.args[0]
     assert applicant.lender_id == "accion"
     assert applicant.requested_program == LoanProgram.SBA_7A
+
+
+def test_underwrite_database_outage_returns_503() -> None:
+    with patch(
+        "http_api.underwrite.run_underwrite",
+        side_effect=DatabaseUnavailableError(),
+    ):
+        client = TestClient(create_app())
+        res = client.post(
+            "/underwrite",
+            json={
+                "case_id": "case-db",
+                "applicant": {
+                    "business_name": "Northside Supply Co.",
+                    "industry": "wholesale trade",
+                    "annual_revenue": 180000,
+                    "requested_loan_amount": 75000,
+                    "years_in_business": 3,
+                    "credit_score_proxy": 700,
+                    "sbss_proxy": 180,
+                    "debt_service_coverage_ratio": 1.4,
+                },
+            },
+        )
+    assert res.status_code == 503
+    assert res.json()["detail"] == DATABASE_UNAVAILABLE_MESSAGE

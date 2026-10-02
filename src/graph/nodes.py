@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 from uuid import uuid4
 
@@ -40,7 +41,10 @@ from models import (
     SubagentName,
     SubagentOutput,
 )
+from retries import DatabaseUnavailableError, is_database_unavailable
 from subagent_state import SubagentState
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_RETRIES = 3
 
@@ -126,6 +130,9 @@ def _outage_state_update(
 
 def provider_error_handler(state: GraphState, error: NodeError) -> GraphState:
     """Backup if a retryable exception escapes the node after RetryPolicy."""
+    if is_database_unavailable(error.error):
+        logger.exception("Underwrite stopped: policy database unreachable")
+        raise DatabaseUnavailableError() from error.error
     reason = str(error.error) or type(error.error).__name__
     applicant = state.get("applicant")
     routing = compute_program_routing(applicant) if applicant is not None else None

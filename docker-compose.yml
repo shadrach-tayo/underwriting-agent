@@ -45,9 +45,16 @@ services:
       API_RELOAD: "false"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
+      # .env points DATABASE_URL at localhost:54326 for host-side tools.
+      # Inside this container that address is refused; use the compose service.
+      DATABASE_URL: postgresql+psycopg://underwriting:underwriting@postgres:5432/underwriting_db
       LANGSMITH_TRACING: "false"
       LANGCHAIN_TRACING_V2: "false"
       BRAINTRUST_TRACING: "false"
+    volumes:
+      # Gold set is gitignored and excluded from the image context. Mount the
+      # local file so /gold-set works without a rebuild.
+      - ./data/gold_set:/app/data/gold_set:ro
     depends_on:
       postgres:
         condition: service_healthy

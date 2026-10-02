@@ -99,11 +99,15 @@ docker run --rm -p 8080:8080 --env-file .env \
   -e POSTGRES_HOST=host.docker.internal -e POSTGRES_PORT=54326 \
   underwriting-api
 
-# or compose profile (wires Postgres hostname automatically):
+# or compose profile (wires Postgres hostname automatically and mounts
+# data/gold_set so the playground /gold-set catalog can load it):
 docker compose --profile api up -d --build api
 
 # Prometheus :9090 + Grafana :3300 (scrapes GET /prometheus)
 docker compose --profile observability up -d
+
+# Run api and observability stack
+docker compose --profile api --profile observability up -d --build
 ```
 
 Ops notes for traces vs scrapes: [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md).

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -15,7 +15,7 @@ from agents.lenders import is_known_lender
 from config import Settings
 from evals.tracing import span
 from http_api.deps import SettingsDep
-from http_api.errors import extract_error_message
+from http_api.errors import extract_error_message, public_dependency_error
 from http_api.schemas import (
     RagAskResponse,
     RagAskStreamRequest,
@@ -119,15 +119,17 @@ def _fetch_k(body: RagSearchRequest) -> int:
     return body.top_k * 4 if filtering else body.top_k
 
 
+def _raise_dependency(exc: Exception) -> NoReturn:
+    status_code, detail = public_dependency_error(exc)
+    raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
 def _retrieve_or_502(pipeline: RagPipeline, query: str, fetch_k: int) -> RetrievalResult:
     try:
         return pipeline.retrieve(query, top_k=fetch_k)
     except Exception as exc:  # noqa: BLE001
         logger.exception("RAG retrieve failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=extract_error_message(exc),
-        ) from exc
+        _raise_dependency(exc)
 
 
 def _generate_or_502(
@@ -139,10 +141,7 @@ def _generate_or_502(
         return pipeline.generate(query, top_k=fetch_k)
     except Exception as exc:  # noqa: BLE001
         logger.exception("RAG generate failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=extract_error_message(exc),
-        ) from exc
+        _raise_dependency(exc)
 
 
 def _hits_from_generate(

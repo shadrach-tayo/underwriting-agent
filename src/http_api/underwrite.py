@@ -15,7 +15,7 @@ from evals.gold_set import load_gold_cases, summarize_routes
 from evals.tracing import span
 from graph.runtime import configure_langsmith, decision_from_state, run_underwrite
 from http_api.deps import SettingsDep
-from http_api.errors import extract_error_message
+from http_api.errors import public_dependency_error
 from http_api.metrics import METRICS
 from http_api.schemas import (
     GoldSetCase,
@@ -139,7 +139,13 @@ def underwrite(
             )
         except Exception as exc:  # noqa: BLE001
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            status_code, detail = public_dependency_error(exc)
             METRICS.record(outcome="error", latency_ms=elapsed_ms, error=True)
+            logger.exception(
+                "underwrite.error request_id=%s applicant_id=%s",
+                request_id,
+                applicant.applicant_id,
+            )
             logger.error(
                 json.dumps(
                     {
@@ -147,14 +153,12 @@ def underwrite(
                         "request_id": request_id,
                         "applicant_id": applicant.applicant_id,
                         "latency_ms": round(elapsed_ms, 2),
-                        "error": extract_error_message(exc),
+                        "status_code": status_code,
+                        "error": detail,
                     }
                 )
             )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=extract_error_message(exc),
-            ) from exc
+            raise HTTPException(status_code=status_code, detail=detail) from exc
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         try:
