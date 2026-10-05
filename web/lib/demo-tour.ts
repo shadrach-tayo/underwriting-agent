@@ -1,90 +1,162 @@
 import type { DecisionOutcome } from "@/lib/underwrite"
 
-export type DemoSpotlight = "queue" | "memo" | "citations" | "hitl"
+export type DemoSpotlight =
+  | "queue"
+  | "memo"
+  | "citations"
+  | "hitl"
+  | "apply"
+  | "portal"
+  | "switch"
+
+export type DemoAction =
+  | "play-apply"
+  | "submit-apply"
+  | "open-citation"
+  | "record-hitl"
+  | "goto"
 
 export type DemoStep = {
   id: string
   title: string
   body: string
+  bullets: string[]
+  tryIt: string
   spotlight: DemoSpotlight
+  href?: string
   caseId?: string
   hitlOutcome?: DecisionOutcome
-  tryIt?: {
-    label: string
-    action: "load-run" | "open-citation" | "record-hitl"
-  }
+  action: DemoAction
+  holdMs: number
 }
 
-/** Three-outcome walk: approve, deny, escalate. About four minutes. */
+/** Seven steps for one labeled case. */
 export const DEMO_STEPS: DemoStep[] = [
   {
-    id: "book",
-    title: "The book",
-    body: "Forty-two labeled files. We walk three: an auto-approve, an eligibility deny, and a borderline escalate.",
-    spotlight: "queue",
+    id: "apply-sample",
+    title: "Fill the form from a labeled case",
+    body: "Cedar Ridge Fabrication is gold-001, a working-capital applicant already in the catalog. One action copies those fields into the form.",
+    bullets: [
+      "Every field stays editable after the case loads",
+      "The input is structured data, not uploaded documents",
+    ],
+    tryIt: "Load Cedar Ridge",
+    spotlight: "apply",
+    href: "/apply",
+    caseId: "gold-001",
+    action: "play-apply",
+    holdMs: 900,
   },
   {
-    id: "approve-run",
-    title: "Auto-approve",
-    body: "Cedar Ridge Fabrication — 7-year manufacturer seeking $250,000 SBA 7(a). Should clear the envelope.",
-    spotlight: "queue",
-    caseId: "gold-001",
-    tryIt: { label: "Run Cedar Ridge", action: "load-run" },
+    id: "apply-submit",
+    title: "Submit reviews the application",
+    body: "The same review the lender desk runs. It checks the numbers and the policy, then returns a recommendation.",
+    bullets: [
+      "Each check reports as it finishes",
+      "A recommendation to approve does not fund the loan",
+    ],
+    tryIt: "Submit application",
+    spotlight: "apply",
+    href: "/apply",
+    action: "submit-apply",
+    holdMs: 1200,
+  },
+  {
+    id: "portal-review",
+    title: "The status page reads this same case",
+    body: "Progress, open questions, and the assigned officer. The loan is not funded.",
+    bullets: [
+      "The case id matches the lender desk",
+      "Open questions are written for the applicant",
+    ],
+    tryIt: "Review status",
+    spotlight: "portal",
+    href: "/portal",
+    action: "goto",
+    holdMs: 3200,
+  },
+  {
+    id: "switch-desk",
+    title: "Switch into the officer seat",
+    body: "Cedar Ridge is already selected and the review is finished. This is the lender view of that same case.",
+    bullets: [
+      "There is no second submission",
+      "Changing seats keeps the case in place",
+    ],
+    tryIt: "Read the memo",
+    spotlight: "memo",
+    href: "/playground/underwrite",
+    action: "goto",
+    holdMs: 2600,
   },
   {
     id: "approve-memo",
-    title: "Read the memo",
-    body: "Policy table is expected versus actual. Open a clause if you want the source.",
+    title: "Each check points at a policy clause",
+    body: "Expected value next to what the case shows. Open a row to read the clause behind it.",
+    bullets: [
+      "Policy checks sit beside the source clause",
+      "Opening a row shows the retrieved text",
+    ],
+    tryIt: "Open a citation",
     spotlight: "memo",
-    tryIt: { label: "Open a citation", action: "open-citation" },
+    href: "/playground/underwrite",
+    action: "open-citation",
+    holdMs: 2200,
   },
   {
     id: "approve-hitl",
-    title: "Officer records the call",
-    body: "The agent does not book the loan. Record Approve on this file.",
+    title: "Record the decision",
+    body: "The recommendation is to approve. Save that decision on this case. Funding is a separate step.",
+    bullets: [
+      "The saved decision is what the desk keeps",
+      "A case above the risk ceiling still cannot be approved",
+    ],
+    tryIt: "Record Approve",
     spotlight: "hitl",
+    href: "/playground/underwrite",
     caseId: "gold-001",
     hitlOutcome: "approve",
-    tryIt: { label: "Record Approve", action: "record-hitl" },
+    action: "record-hitl",
+    holdMs: 1800,
   },
   {
-    id: "deny-run",
-    title: "Auto-deny",
-    body: "Lucky Star Gaming Lounge fails the eligibility gate — restricted industry, not a credit-score call.",
-    spotlight: "queue",
-    caseId: "gold-006",
-    tryIt: { label: "Run Lucky Star", action: "load-run" },
-  },
-  {
-    id: "deny-hitl",
-    title: "Record the deny",
-    body: "Match the gate. Officer Deny.",
-    spotlight: "hitl",
-    caseId: "gold-006",
-    hitlOutcome: "deny",
-    tryIt: { label: "Record Deny", action: "record-hitl" },
-  },
-  {
-    id: "escalate-run",
-    title: "Escalate",
-    body: "Lakeside HVAC clears both programs, but DSCR is borderline. The envelope sends it to a human.",
-    spotlight: "queue",
-    caseId: "gold-010",
-    tryIt: { label: "Run Lakeside HVAC", action: "load-run" },
-  },
-  {
-    id: "escalate-hitl",
-    title: "Send to review",
-    body: "Officer Escalate. That is the product: recommend, cite, then a human records the call.",
-    spotlight: "hitl",
-    caseId: "gold-010",
-    hitlOutcome: "escalate",
-    tryIt: { label: "Record Escalate", action: "record-hitl" },
+    id: "portal-decided",
+    title: "The status page shows the recorded outcome",
+    body: "The applicant page refreshes on the same case and shows what the officer saved. The loan is still not funded.",
+    bullets: [
+      "One case id on both sides",
+      "Lucky Star and Lakeside stay in the queue for the other two outcomes",
+    ],
+    tryIt: "Finish",
+    spotlight: "portal",
+    href: "/portal",
+    action: "goto",
+    holdMs: 3600,
   },
 ]
+
+export const DEMO_INTRO = {
+  kicker: "Demo walkthrough",
+  title: "One case, inside the envelope.",
+  body: "Cedar Ridge is clear enough to auto-decide, with the cited trace beside it. A case above the hard-coded risk ceiling cannot take that path.",
+  hold: "Stays in this browser · seven steps",
+} as const
+
+export const DEMO_GRAPH_NODES = [
+  { id: "underwriter", label: "Normalize the applicant" },
+  { id: "financial_analysis", label: "Compute the ratios" },
+  { id: "policy_compliance", label: "Match policy rules" },
+  { id: "self_critic", label: "Self-critic" },
+  { id: "decision", label: "Write the recommendation" },
+] as const
 
 export const DEMO_HITL_CAUSE: Record<string, string> = {
   "gold-001": "In envelope. Healthy DSCR, both programs, low risk.",
   "gold-006": "Eligibility gate — restricted industry.",
   "gold-010": "Borderline DSCR. Both programs eligible; needs a human.",
 }
+
+export const DEMO_FILE = {
+  caseId: "gold-001",
+  name: "Cedar Ridge Fabrication",
+} as const

@@ -4,9 +4,8 @@ import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 
+import { DeskPersonaSeams } from "@/components/borrower-request"
 import {
-  DemoTourCard,
-  DemoTourLauncher,
   demoSpotlightClass,
 } from "@/components/playground/demo-tour"
 import { GoldSetQueue } from "@/components/playground/gold-set-queue"
@@ -54,6 +53,7 @@ import {
 } from "@/lib/industries"
 import { DEMO_STEPS } from "@/lib/demo-tour"
 import { cn } from "@/lib/utils"
+import { useCaseSessionStore } from "@/stores/case-session-store"
 import { useDemoTourStore } from "@/stores/demo-tour-store"
 import { useUnderwriteStore } from "@/stores/underwrite-store"
 
@@ -66,10 +66,40 @@ export function UnderwritePanel() {
   const clearResults = useUnderwriteStore((s) => s.clearResults)
   const recordOutcome = useUnderwriteStore((s) => s.recordOutcome)
   const loadGoldCase = useUnderwriteStore((s) => s.loadGoldCase)
+  const focusSessionCase = useUnderwriteStore((s) => s.focusSessionCase)
+  const deskFocus = useCaseSessionStore((s) => s.deskFocus)
+  const sessionCaseId = useCaseSessionStore((s) => s.caseId)
+  const sessionApplicant = useCaseSessionStore((s) => s.applicant)
+  const setDeskFocus = useCaseSessionStore((s) => s.setDeskFocus)
+  const registerHandlers = useDemoTourStore((s) => s.registerHandlers)
   const tourActive = useDemoTourStore((s) => s.active)
   const tourSpotlight = useDemoTourStore(
     (s) => DEMO_STEPS[s.stepIndex]?.spotlight
   )
+
+  React.useEffect(() => {
+    if (tourActive) setFormOpen(false)
+  }, [setFormOpen, tourActive])
+
+  React.useEffect(() => {
+    if (deskFocus !== "file") return
+    function sync() {
+      if (
+        !useUnderwriteStore.persist.hasHydrated() ||
+        !useCaseSessionStore.persist.hasHydrated()
+      ) {
+        return
+      }
+      focusSessionCase()
+    }
+    const unsubWrite = useUnderwriteStore.persist.onFinishHydration(sync)
+    const unsubSession = useCaseSessionStore.persist.onFinishHydration(sync)
+    sync()
+    return () => {
+      unsubWrite()
+      unsubSession()
+    }
+  }, [deskFocus, sessionCaseId, focusSessionCase])
   const { catalog } = useGoldSetQuery()
 
   const { result, errorMessage, isRunning, activeRun, run } =
@@ -88,7 +118,7 @@ export function UnderwritePanel() {
       const data = await run({ force: true })
       const caseId = selectedCaseId ?? data.case_id
       if (caseId && data.decision?.outcome) {
-        recordOutcome(caseId, data.decision.outcome)
+        recordOutcome(caseId, data)
       }
       return data
     } catch (err) {
@@ -98,26 +128,34 @@ export function UnderwritePanel() {
     }
   }
 
-  async function onDemoLoadRun(caseId: string) {
-    const row = catalog?.cases.find((item) => item.case_id === caseId)
-    if (!row) {
-      throw new Error(`Demo file ${caseId} is not in the gold-set catalog.`)
-    }
-    loadGoldCase(row)
-    setLocalError(null)
-    try {
-      const data = await run({ force: true })
-      const id = caseId || data.case_id
-      if (id && data.decision?.outcome) {
-        recordOutcome(id, data.decision.outcome)
+  const onDemoLoadRun = React.useCallback(
+    async (caseId: string) => {
+      const row = catalog?.cases.find((item) => item.case_id === caseId)
+      if (!row) {
+        throw new Error(`Demo file ${caseId} is not in the gold-set catalog.`)
       }
-      setFormOpen(false)
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : String(err))
-      setFormOpen(true)
-      throw err
-    }
-  }
+      loadGoldCase(row)
+      setLocalError(null)
+      try {
+        const data = await run({ force: true })
+        const id = caseId || data.case_id
+        if (id && data.decision?.outcome) {
+          recordOutcome(id, data)
+        }
+        setFormOpen(false)
+      } catch (err) {
+        setLocalError(err instanceof Error ? err.message : String(err))
+        setFormOpen(true)
+        throw err
+      }
+    },
+    [catalog?.cases, loadGoldCase, recordOutcome, run, setFormOpen]
+  )
+
+  React.useEffect(() => {
+    registerHandlers({ loadRun: onDemoLoadRun })
+    return () => registerHandlers({ loadRun: null })
+  }, [onDemoLoadRun, registerHandlers])
 
   const displayError = localError ?? errorMessage
   const loanSummary = (() => {
@@ -130,24 +168,40 @@ export function UnderwritePanel() {
     form.industry.trim() || null,
     loanSummary,
   ].filter(Boolean)
+  const fileFocus =
+    deskFocus === "file" && Boolean(sessionCaseId && sessionApplicant)
+  const showCatalog = tourActive ? tourSpotlight === "queue" : !fileFocus
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Underwrite
+            {fileFocus
+              ? sessionApplicant?.business_name ?? "Underwrite"
+              : "Underwrite"}
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Pick a labeled gold-set case or edit the form, then submit to{" "}
-            <code className="font-mono text-xs">POST /underwrite</code>. Draft
-            form and last run persist across navigation; the decision always
-            reflects the committed request.
+            {tourActive
+              ? "Cedar Ridge is selected. The review is finished. Record the decision here."
+              : fileFocus
+                ? `Same application as the applicant page · ${sessionCaseId}.`
+                : "Choose a labeled case or edit the form, then run a review."}
           </p>
         </div>
-        <DemoTourLauncher />
+        {fileFocus && !tourActive ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDeskFocus("catalog")}
+          >
+            All labeled cases
+          </Button>
+        ) : null}
       </div>
 
+      {showCatalog ? (
       <div
         data-demo="queue"
         className={demoSpotlightClass(
@@ -156,6 +210,9 @@ export function UnderwritePanel() {
       >
         <GoldSetQueue />
       </div>
+      ) : null}
+
+      {tourActive ? null : <DeskPersonaSeams />}
 
       <Collapsible open={formOpen} onOpenChange={setFormOpen}>
         <Card className="gap-0 py-0">
@@ -164,9 +221,9 @@ export function UnderwritePanel() {
               <CardTitle>Applicant</CardTitle>
               <CardDescription>
                 {locked
-                  ? "Form locked while the graph run is in flight."
+                  ? "Form locked while the review is running."
                   : formOpen
-                    ? "Synthetic / non-PII fields aligned with the graph Applicant model."
+                    ? "Practice fields only. No real applicant data."
                     : summaryBits.join(" · ")}
               </CardDescription>
               <CardAction>
@@ -443,7 +500,7 @@ export function UnderwritePanel() {
               <span />
             )}
             <Button disabled={locked} onClick={() => void onRun()}>
-              {locked ? "Running graph…" : "Run underwrite"}
+              {locked ? "Reviewing…" : "Run review"}
             </Button>
           </CardFooter>
         </Card>
@@ -452,11 +509,11 @@ export function UnderwritePanel() {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="font-heading text-lg font-semibold tracking-tight">
-            Credit memo
+            Decision packet
           </h2>
           <p className="text-sm text-muted-foreground">
-            Agent recommendation, policy table, citations, and the officer call
-            recorded against this file.
+            The recommendation, the policy checks, the source clauses, and the
+            decision saved on this case.
           </p>
         </div>
         <div
@@ -468,13 +525,15 @@ export function UnderwritePanel() {
         >
           <UnderwriteResultView
             result={result}
-            applicant={activeRun?.applicant ?? null}
+            applicant={
+              activeRun?.applicant ??
+              (fileFocus ? sessionApplicant : null)
+            }
             loading={isRunning}
           />
         </div>
       </section>
 
-      <DemoTourCard onLoadRun={onDemoLoadRun} />
     </div>
   )
 }

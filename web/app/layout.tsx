@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono, Nunito_Sans } from "next/font/google"
 
+import { AskAiSheet } from "@/components/ask-ai-sheet"
+import { DemoTourHost } from "@/components/demo-tour-host"
 import { SiteHeader } from "@/components/site-header"
 import { QueryProvider } from "@/components/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -18,9 +20,9 @@ const fontMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Underwriting Console",
+  title: "Underwriting Agent",
   description:
-    "Admin inspection for policy RAG and a playground for underwriting agents.",
+    "Demo of agentic underwriting for any kind of lending. Auto-decide inside the envelope, escalate the rest with a cited trace, and keep a hard-coded risk ceiling.",
 }
 
 export default function RootLayout({
@@ -49,6 +51,8 @@ export default function RootLayout({
                 <div className="flex min-h-svh flex-col">
                   <SiteHeader />
                   <main className="flex-1">{children}</main>
+                  <AskAiSheet />
+                  <DemoTourHost />
                 </div>
               </TooltipProvider>
             </QueryProvider>

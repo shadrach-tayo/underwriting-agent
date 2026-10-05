@@ -15,6 +15,7 @@ import {
   type DecisionOutcome,
   type GoldSetCase,
 } from "@/lib/underwrite"
+import { officerDecisionLabel } from "@/lib/case-session"
 import { cn } from "@/lib/utils"
 import {
   useUnderwriteStore,
@@ -49,6 +50,10 @@ export function GoldSetQueue() {
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]["value"]>(
     "all"
   )
+  const [ready, setReady] = React.useState(false)
+  React.useEffect(() => {
+    setReady(true)
+  }, [])
 
   const rows = React.useMemo(() => {
     const cases = catalog?.cases ?? []
@@ -74,13 +79,13 @@ export function GoldSetQueue() {
           <p className="text-sm text-muted-foreground">
             {catalog
               ? `${catalog.n_cases} labeled cases · ${catalog.counts.approve} approve · ${catalog.counts.deny} deny · ${catalog.counts.escalate} escalate`
-              : "42 labeled cases from data/gold_set. Pick one to fill the applicant."}
+              : "42 labeled cases from data/gold_set. Choose one to fill the form."}
           </p>
         </div>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search borrowers…"
+          placeholder="Search cases…"
           className="max-w-xs"
         />
       </div>
@@ -124,7 +129,7 @@ export function GoldSetQueue() {
             </tr>
           </thead>
           <tbody>
-            {isLoading
+            {!ready || isLoading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b last:border-0">
                     <td colSpan={5} className="px-3 py-3">
@@ -138,13 +143,14 @@ export function GoldSetQueue() {
                     row={row}
                     selected={selectedCaseId === row.case_id}
                     lastRun={lastOutcomes[row.case_id]}
+                    flags={lastOutcomes[row.case_id]?.flags ?? []}
                     officer={hitlDecisions[row.case_id]?.outcome}
                     onSelect={() => loadGoldCase(row)}
                   />
                 ))}
           </tbody>
         </table>
-        {!isLoading && rows.length === 0 ? (
+        {ready && !isLoading && rows.length === 0 ? (
           <p className="px-3 py-6 text-sm text-muted-foreground">
             No cases match that filter.
           </p>
@@ -158,12 +164,14 @@ function QueueRow({
   row,
   selected,
   lastRun,
+  flags,
   officer,
   onSelect,
 }: {
   row: GoldSetCase
   selected: boolean
   lastRun?: LastRunRecord
+  flags: string[]
   officer?: LastRunRecord["outcome"]
   onSelect: () => void
 }) {
@@ -218,9 +226,18 @@ function QueueRow({
                 variant="secondary"
                 className={cn("text-[10px]", toneClass(officer))}
               >
-                Officer {formatStatusLabel(officer)}
+                Officer {officerDecisionLabel(officer).toLowerCase()}
               </Badge>
             ) : null}
+            {flags.map((flag) => (
+              <Badge
+                key={flag}
+                variant="outline"
+                className="text-[10px] text-amber-800 dark:text-amber-300"
+              >
+                {flag}
+              </Badge>
+            ))}
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">Not run</span>

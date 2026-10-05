@@ -4,8 +4,9 @@ import * as React from "react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { officerDecisionLabel } from "@/lib/case-session"
 import {
-  formatStatusLabel,
+  friendlyDecision,
   type DecisionOutcome,
   type GoldSetCase,
 } from "@/lib/underwrite"
@@ -53,21 +54,21 @@ export function HitlBar({
             Officer decision
           </p>
           <p className="text-xs text-muted-foreground">
-            The agent does not book the loan. Record the call against this file.
+            Record the decision on this case. A recommendation does not fund the loan.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] tracking-wide uppercase">
           <span className="text-muted-foreground">
-            Agent · {formatStatusLabel(agentOutcome)}
+            Recommendation · {friendlyDecision(agentOutcome)}
           </span>
           {gold ? (
             <span className="text-muted-foreground">
-              Gold · {formatStatusLabel(gold.gold_outcome)}
+              Expected · {friendlyDecision(gold.gold_outcome)}
             </span>
           ) : null}
           {hitl ? (
             <span className="font-semibold">
-              Officer · {formatStatusLabel(hitl.outcome)}
+              Officer · {officerDecisionLabel(hitl.outcome)}
             </span>
           ) : null}
         </div>
@@ -75,7 +76,7 @@ export function HitlBar({
       <Textarea
         value={cause}
         onChange={(event) => setCause(event.target.value)}
-        placeholder="Decision cause (optional)"
+        placeholder="Note for this outcome (optional)"
         rows={2}
       />
       <div className="flex flex-wrap gap-2">

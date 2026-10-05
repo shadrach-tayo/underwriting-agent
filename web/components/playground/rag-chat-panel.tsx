@@ -9,8 +9,8 @@ import {
 
 import { PolicyThread } from "@/components/assistant-ui/policy-thread"
 import { RagFilters } from "@/components/playground/rag-filters"
-import { Button } from "@/components/ui/button"
 import { usePolicyRagRuntime } from "@/hooks/use-policy-rag-runtime"
+import { cn } from "@/lib/utils"
 
 const chatConfig = AuiConfig({
   suggestions: Suggestions([
@@ -20,43 +20,60 @@ const chatConfig = AuiConfig({
   ]),
 })
 
-export function RagChatPanel() {
+export function RagChatPanel({ compact = false }: { compact?: boolean }) {
   const [threadKey, setThreadKey] = useState(0)
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div
+      className={cn(
+        compact ? "flex h-full min-h-0 flex-col gap-3" : "space-y-4"
+      )}
+    >
+      <div className="flex shrink-0 flex-wrap items-end gap-3">
         <div className="min-w-0 flex-1">
           <RagFilters programId="rag-chat-program" lenderId="rag-chat-lender" />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setThreadKey((key) => key + 1)}
-        >
-          New chat
-        </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Filters apply to the next turn. Answers stream from{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
-          POST /rag/ask/stream
-        </code>{" "}
-        using generate citations as sources.
-      </p>
-      <div className="h-[min(42rem,calc(100svh-16rem))] overflow-hidden rounded-xl border border-border/80 bg-card">
-        <ChatRuntime key={threadKey} />
+      {compact ? null : (
+        <p className="text-xs text-muted-foreground">
+          Filters apply to the next turn. Answers stream from{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
+            POST /rag/ask/stream
+          </code>{" "}
+          using generate citations as sources.
+        </p>
+      )}
+      <div
+        className={cn(
+          "min-h-0 overflow-hidden bg-card",
+          compact
+            ? "flex flex-1 flex-col"
+            : "h-[min(42rem,calc(100svh-16rem))] rounded-xl border border-border/80"
+        )}
+      >
+        <ChatRuntime
+          key={threadKey}
+          compact={compact}
+          onNewChat={() => setThreadKey((key) => key + 1)}
+        />
       </div>
     </div>
   )
 }
 
-function ChatRuntime() {
+function ChatRuntime({
+  compact,
+  onNewChat,
+}: {
+  compact?: boolean
+  onNewChat: () => void
+}) {
   const runtime = usePolicyRagRuntime()
   return (
     <AssistantRuntimeProvider runtime={runtime} config={chatConfig}>
-      <PolicyThread />
+      <div className="flex h-full min-h-0 flex-col">
+        <PolicyThread compact={compact} onNewChat={onNewChat} />
+      </div>
     </AssistantRuntimeProvider>
   )
 }

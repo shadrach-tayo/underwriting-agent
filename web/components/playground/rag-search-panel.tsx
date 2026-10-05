@@ -2,7 +2,18 @@
 
 import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { ArrowDown01Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons"
+
+import { AskModePills } from "@/components/assistant-ui/ask-mode-pills"
+import {
+  AskQuestionBox,
+  AskQuestionToolbar,
+} from "@/components/assistant-ui/ask-question-box"
 
 import { Markdown } from "@/components/markdown"
 import { RagFilters } from "@/components/playground/rag-filters"
@@ -13,7 +24,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -47,15 +57,16 @@ function snippet(text: string, max = 140) {
   return `${flat.slice(0, max).trimEnd()}…`
 }
 
-export function RagSearchPanel() {
+function QueryBox({
+  queryId,
+  compact,
+}: {
+  queryId: string
+  compact?: boolean
+}) {
   const query = useRagSearchStore((s) => s.query)
-  const openHits = useRagSearchStore((s) => s.openHits)
   const setQuery = useRagSearchStore((s) => s.setQuery)
-  const setHitOpen = useRagSearchStore((s) => s.setHitOpen)
-  const expandAllHits = useRagSearchStore((s) => s.expandAllHits)
-  const collapseAllHits = useRagSearchStore((s) => s.collapseAllHits)
   const clearResults = useRagSearchStore((s) => s.clearResults)
-
   const { result, errorMessage, isSearching, runSearch } = useRagSearchQuery()
 
   function onQueryKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -63,6 +74,157 @@ export function RagSearchPanel() {
       event.preventDefault()
       void runSearch({ force: true })
     }
+  }
+
+  if (compact) {
+    return (
+      <AskQuestionBox>
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mb-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          >
+            {errorMessage}
+          </div>
+        ) : null}
+        <Textarea
+          id={queryId}
+          rows={1}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onQueryKeyDown}
+          placeholder="How can I help you today?"
+          className="max-h-40 min-h-11 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+        />
+        <AskQuestionToolbar>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            className="size-8 rounded-lg"
+            onClick={() => {
+              setQuery("")
+              clearResults()
+            }}
+            aria-label="New search"
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          </Button>
+          <AskModePills />
+          <div className="ms-auto">
+            <Button
+              type="button"
+              size="icon-sm"
+              className="rounded-full"
+              disabled={isSearching || !query.trim()}
+              onClick={() => void runSearch({ force: true })}
+              aria-label={isSearching ? "Searching" : "Search policy"}
+            >
+              <HugeiconsIcon
+                icon={isSearching ? Search01Icon : ArrowUp01Icon}
+                strokeWidth={2}
+              />
+            </Button>
+          </div>
+        </AskQuestionToolbar>
+      </AskQuestionBox>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor={queryId}>Query</Label>
+          <span className="text-[11px] text-muted-foreground">
+            ⌘/Ctrl + Enter
+          </span>
+        </div>
+        <Textarea
+          id={queryId}
+          rows={3}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onQueryKeyDown}
+          placeholder="Search policy clauses…"
+          className="min-h-24 resize-y"
+        />
+      </div>
+
+      <RagFilters programId="rag-program" lenderId="rag-lender" />
+
+      {errorMessage ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            Ingest policies from{" "}
+            <code className="font-mono text-[11px]">/admin</code> first.
+          </p>
+          {result ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => clearResults()}
+            >
+              Clear results
+            </Button>
+          ) : null}
+        </div>
+        <Button
+          disabled={isSearching || !query.trim()}
+          onClick={() => void runSearch({ force: true })}
+        >
+          {isSearching ? "Searching…" : "Search policy"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+export function RagSearchPanel({ compact = false }: { compact?: boolean }) {
+  const openHits = useRagSearchStore((s) => s.openHits)
+  const setHitOpen = useRagSearchStore((s) => s.setHitOpen)
+  const expandAllHits = useRagSearchStore((s) => s.expandAllHits)
+  const collapseAllHits = useRagSearchStore((s) => s.collapseAllHits)
+
+  const { result } = useRagSearchQuery()
+
+  if (compact) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="shrink-0 pb-3">
+          <RagFilters programId="rag-program" lenderId="rag-lender" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+          {result ? (
+            <ResultsSection
+              result={result}
+              openHits={openHits}
+              setHitOpen={setHitOpen}
+              expandAllHits={expandAllHits}
+              collapseAllHits={collapseAllHits}
+            />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Search the policy corpus. Matches appear here; the query stays at
+              the bottom.
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 bg-background pb-4">
+          <QueryBox queryId="rag-query-sheet" compact />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -79,59 +241,8 @@ export function RagSearchPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 pt-(--card-spacing)">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="rag-query">Query</Label>
-              <span className="text-[11px] text-muted-foreground">
-                ⌘/Ctrl + Enter
-              </span>
-            </div>
-            <Textarea
-              id="rag-query"
-              rows={3}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onQueryKeyDown}
-              placeholder="Search policy clauses…"
-              className="min-h-24 resize-y"
-            />
-          </div>
-
-          <RagFilters programId="rag-program" lenderId="rag-lender" />
-
-          {errorMessage ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-            >
-              {errorMessage}
-            </div>
-          ) : null}
+          <QueryBox queryId="rag-query" />
         </CardContent>
-        <CardFooter className="justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-muted-foreground">
-              Ingest policies from{" "}
-              <code className="font-mono text-[11px]">/admin</code> first.
-            </p>
-            {result ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => clearResults()}
-              >
-                Clear results
-              </Button>
-            ) : null}
-          </div>
-          <Button
-            disabled={isSearching || !query.trim()}
-            onClick={() => void runSearch({ force: true })}
-          >
-            {isSearching ? "Searching…" : "Search policy"}
-          </Button>
-        </CardFooter>
       </Card>
 
       {result ? (

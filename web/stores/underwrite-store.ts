@@ -3,18 +3,24 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
+import { makeCaseId } from "@/lib/case-session"
 import {
+  applicantToForm,
   buildUnderwritePayload,
+  extractReviewFlags,
   goldCaseToForm,
   type DecisionOutcome,
   type GoldSetCase,
   type UnderwriteForm,
   type UnderwriteRequestParams,
+  type UnderwriteResult,
 } from "@/lib/underwrite"
+import { useCaseSessionStore } from "@/stores/case-session-store"
 
 export type LastRunRecord = {
   outcome: DecisionOutcome
   at: string
+  flags?: string[]
 }
 
 export type HitlRecord = {
@@ -37,9 +43,12 @@ type UnderwriteState = {
     key: K,
     value: UnderwriteForm[K]
   ) => void
+  replaceForm: (form: UnderwriteForm) => void
   setFormOpen: (open: boolean) => void
   loadGoldCase: (row: GoldSetCase) => void
-  recordOutcome: (caseId: string, outcome: DecisionOutcome) => void
+  focusSessionCase: () => void
+  ensureCaseIds: () => { caseId: string; applicantId: string }
+  recordOutcome: (caseId: string, result: UnderwriteResult) => void
   recordHitl: (caseId: string, record: HitlRecord) => void
   commitRun: () => UnderwriteRequestParams | null
   clearResults: () => void
@@ -75,36 +84,96 @@ export const useUnderwriteStore = create<UnderwriteState>()(
         set((state) => ({
           form: { ...state.form, [key]: value },
         })),
+      replaceForm: (form) => set({ form }),
       setFormOpen: (formOpen) => set({ formOpen }),
-      loadGoldCase: (row) =>
+      loadGoldCase: (row) => {
+        useCaseSessionStore.getState().openGoldCase(row)
         set({
           form: goldCaseToForm(row),
           selectedCaseId: row.case_id,
           selectedApplicantId: row.applicant_id,
           formOpen: true,
-        }),
-      recordOutcome: (caseId, outcome) =>
+        })
+      },
+      focusSessionCase: () => {
+        const session = useCaseSessionStore.getState()
+        if (!session.caseId || !session.applicant) return
+        const current = get()
+        if (current.selectedCaseId === session.caseId) {
+          set({
+            formOpen: current.activeRun ? false : current.formOpen,
+          })
+          return
+        }
+        const form = applicantToForm(session.applicant)
+        const applicantId =
+          session.applicantId ||
+          session.applicant.applicant_id ||
+          session.caseId
+        set({
+          form,
+          selectedCaseId: session.caseId,
+          selectedApplicantId: applicantId,
+          formOpen: !current.activeRun || current.activeRun.case_id !== session.caseId,
+          activeRun:
+            current.activeRun?.case_id === session.caseId
+              ? current.activeRun
+              : null,
+        })
+      },
+      ensureCaseIds: () => {
+        const current = get()
+        if (current.selectedCaseId) {
+          return {
+            caseId: current.selectedCaseId,
+            applicantId: current.selectedApplicantId || current.selectedCaseId,
+          }
+        }
+        const caseId = makeCaseId()
+        const applicantId = `app-${caseId}`
+        useCaseSessionStore.setState({ caseId, applicantId })
+        set({ selectedCaseId: caseId, selectedApplicantId: applicantId })
+        return { caseId, applicantId }
+      },
+      recordOutcome: (caseId, result) => {
+        const session = useCaseSessionStore.getState()
+        if (session.caseId === caseId) {
+          session.markGraphRan(result.decision.outcome, result.decision)
+        }
         set((state) => ({
           lastOutcomes: {
             ...state.lastOutcomes,
-            [caseId]: { outcome, at: new Date().toISOString() },
+            [caseId]: {
+              outcome: result.decision.outcome,
+              at: new Date().toISOString(),
+              flags: extractReviewFlags(result),
+            },
           },
-        })),
-      recordHitl: (caseId, record) =>
+        }))
+      },
+      recordHitl: (caseId, record) => {
+        const session = useCaseSessionStore.getState()
+        if (session.caseId === caseId) {
+          session.recordHitl(record.outcome, record.cause)
+        }
         set((state) => ({
           hitlDecisions: {
             ...state.hitlDecisions,
             [caseId]: record,
           },
-        })),
+        }))
+      },
       commitRun: () => {
         try {
-          const { form, selectedCaseId, selectedApplicantId } = get()
+          const { caseId, applicantId } = get().ensureCaseIds()
+          const { form } = get()
           const activeRun = buildUnderwritePayload(form, {
-            case_id: selectedCaseId,
-            applicant_id: selectedApplicantId,
+            case_id: caseId,
+            applicant_id: applicantId,
           })
-          set({ activeRun })
+          useCaseSessionStore.getState().setApplicant(activeRun.applicant)
+          useCaseSessionStore.getState().markSubmitted()
+          set({ activeRun, selectedCaseId: caseId, selectedApplicantId: applicantId })
           return activeRun
         } catch {
           return null
@@ -113,7 +182,7 @@ export const useUnderwriteStore = create<UnderwriteState>()(
       clearResults: () => set({ activeRun: null, formOpen: true }),
     }),
     {
-      name: "underwriting.playground.underwrite.v6",
+      name: "underwriting.playground.underwrite.v7",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: (state) => ({

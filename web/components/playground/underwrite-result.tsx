@@ -22,6 +22,7 @@ import {
   formatLender,
   formatProgram,
   formatStatusLabel,
+  friendlyDecision,
   normalizeRationale,
   outcomeTone,
   parseTraceFacts,
@@ -376,8 +377,8 @@ export function UnderwriteResultView({
           No decision yet
         </p>
         <p className="mt-1 max-w-md">
-          Pick a gold-set case or edit the applicant, then run underwrite. The
-          memo stays cached while you navigate the playground.
+          Choose a labeled case or edit the applicant, then run a review. The
+          result stays on this page while you look around.
         </p>
       </div>
     )
@@ -448,8 +449,8 @@ export function UnderwriteResultView({
               tone === "neutral" && "bg-muted-foreground"
             )}
           />
-          Recommendation · {formatStatusLabel(decision.outcome)}
-          {gold ? ` · gold ${formatStatusLabel(gold.gold_outcome)}` : ""}
+          Recommendation · {friendlyDecision(decision.outcome)}
+          {gold ? ` · expected ${friendlyDecision(gold.gold_outcome).toLowerCase()}` : ""}
         </p>
       </header>
 
@@ -705,10 +706,10 @@ export function UnderwriteResultView({
         >
           <div>
             <p className="text-sm font-semibold tracking-tight">
-              Policy citations
+              Source clauses
             </p>
             <p className="text-xs text-muted-foreground">
-              Open a clause to read the retrieved text and source.
+              Open a clause to read the text behind this recommendation.
             </p>
           </div>
           <CitationChips

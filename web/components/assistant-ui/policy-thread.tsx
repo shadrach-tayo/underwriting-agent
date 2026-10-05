@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Add01Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
   Cancel01Icon,
@@ -21,6 +22,11 @@ import {
 } from "@assistant-ui/react"
 import type { FC } from "react"
 
+import { AskModePills } from "@/components/assistant-ui/ask-mode-pills"
+import {
+  AskQuestionToolbar,
+  askQuestionBoxClassName,
+} from "@/components/assistant-ui/ask-question-box"
 import { Reasoning } from "@/components/assistant-ui/reasoning"
 import { Sources } from "@/components/assistant-ui/sources"
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui"
@@ -32,7 +38,15 @@ const MarkdownText: TextMessagePartComponent = ({ text }) => (
   <Markdown>{text}</Markdown>
 )
 
-export function PolicyThread() {
+export function PolicyThread({
+  compact = false,
+  docked = false,
+  onNewChat,
+}: {
+  compact?: boolean
+  docked?: boolean
+  onNewChat?: () => void
+}) {
   const isEmpty = useAuiState((s) => s.thread.messages.length === 0)
 
   return (
@@ -40,12 +54,13 @@ export function PolicyThread() {
       <ThreadPrimitive.Viewport className="relative flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth">
         <div
           className={cn(
-            "mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pt-4",
+            "mx-auto flex w-full max-w-3xl flex-1 flex-col pt-4",
+            compact || docked ? "px-0" : "px-4",
             isEmpty && "justify-center"
           )}
         >
           <AuiIf condition={(s) => s.thread.messages.length === 0}>
-            <ThreadWelcome />
+            <ThreadWelcome docked={docked} />
             <ThreadSuggestions />
           </AuiIf>
 
@@ -58,27 +73,29 @@ export function PolicyThread() {
 
         <ThreadPrimitive.ViewportFooter
           className={cn(
-            "sticky bottom-0 mt-auto flex flex-col gap-3 bg-background px-4 pb-4",
+            "sticky bottom-0 mt-auto flex flex-col gap-3 bg-background pb-4",
+            compact ? "px-0" : "px-4",
             !isEmpty && "pt-2"
           )}
         >
           <ThreadScrollToBottom />
           <ThreadFollowupSuggestions />
-          <Composer />
+          <Composer docked={docked} onNewChat={onNewChat} />
         </ThreadPrimitive.ViewportFooter>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
   )
 }
 
-const ThreadWelcome: FC = () => (
+const ThreadWelcome: FC<{ docked?: boolean }> = ({ docked }) => (
   <div className="mb-6 space-y-2 text-center">
     <h2 className="font-heading text-xl font-semibold tracking-tight">
-      Policy chat
+      {docked ? "Ask about this file" : "Policy chat"}
     </h2>
     <p className="mx-auto max-w-md text-sm text-muted-foreground">
-      Ask a question. The agent retrieves layered policy chunks, then streams a
-      grounded answer with sources.
+      {docked
+        ? "Eligibility, DSCR, and program rules come back with the clause they used."
+        : "Ask about a rule. The answer comes back with the policy chunks it used."}
     </p>
   </div>
 )
@@ -174,17 +191,35 @@ const ThreadScrollToBottom: FC = () => (
   </ThreadPrimitive.ScrollToBottom>
 )
 
-const Composer: FC = () => (
-  <ComposerPrimitive.Root className="mx-auto w-full max-w-3xl">
-    <div className="flex flex-col gap-2 rounded-2xl border border-border/80 bg-muted/20 p-2 focus-within:border-foreground/25">
-      <ComposerPrimitive.Input
-        placeholder="Ask a policy question…"
-        className="max-h-40 min-h-10 w-full resize-none bg-transparent px-2.5 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
-        rows={1}
-        autoFocus
-        aria-label="Message input"
-      />
-      <div className="flex items-center justify-end">
+const Composer: FC<{ docked?: boolean; onNewChat?: () => void }> = ({
+  docked,
+  onNewChat,
+}) => (
+  <ComposerPrimitive.Root className={cn("mx-auto", askQuestionBoxClassName)}>
+    <ComposerPrimitive.Input
+      placeholder={
+        docked ? "Ask about this application…" : "How can I help you today?"
+      }
+      className="max-h-40 min-h-11 w-full resize-none bg-transparent px-2 py-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+      rows={1}
+      autoFocus={!docked}
+      aria-label="Message input"
+    />
+    <AskQuestionToolbar>
+      {onNewChat ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon-sm"
+          className="size-8 rounded-lg"
+          onClick={onNewChat}
+          aria-label="New chat"
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+        </Button>
+      ) : null}
+      {docked ? null : <AskModePills />}
+      <div className="ms-auto flex items-center">
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send
             className={cn(buttonVariants({ size: "icon-sm" }), "rounded-full")}
@@ -206,6 +241,6 @@ const Composer: FC = () => (
           </ComposerPrimitive.Cancel>
         </AuiIf>
       </div>
-    </div>
+    </AskQuestionToolbar>
   </ComposerPrimitive.Root>
 )

@@ -330,6 +330,33 @@ export function goldCaseToForm(row: GoldSetCase): UnderwriteForm {
   }
 }
 
+export function applicantToForm(
+  applicant: UnderwriteApplicantPayload
+): UnderwriteForm {
+  return {
+    business_name: applicant.business_name,
+    industry: applicant.industry,
+    annual_revenue: String(applicant.annual_revenue),
+    requested_loan_amount: String(applicant.requested_loan_amount),
+    years_in_business: String(applicant.years_in_business),
+    debt_service_coverage_ratio:
+      applicant.debt_service_coverage_ratio == null
+        ? ""
+        : String(applicant.debt_service_coverage_ratio),
+    credit_score_proxy:
+      applicant.credit_score_proxy == null
+        ? ""
+        : String(applicant.credit_score_proxy),
+    sbss_proxy:
+      applicant.sbss_proxy == null ? "" : String(applicant.sbss_proxy),
+    requested_program: applicant.requested_program ?? "",
+    lender_id: applicant.lender_id ?? "",
+    has_bankruptcy: applicant.has_bankruptcy,
+    has_severe_fraud_alert: applicant.has_severe_fraud_alert,
+    notes: applicant.notes ?? "",
+  }
+}
+
 export async function fetchGoldSet(): Promise<GoldSetResponse> {
   const res = await fetch(`${apiBase()}/gold-set`)
   if (!res.ok) {
@@ -387,6 +414,12 @@ export function formatStatusLabel(value: string | null | undefined): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ")
+}
+
+/** Decision words for sentences and status lines. Deny reads as decline. */
+export function friendlyDecision(outcome: string | null | undefined): string {
+  if (outcome === "deny") return "Decline"
+  return formatStatusLabel(outcome)
 }
 
 export function formatProgram(value: string | null | undefined) {
@@ -579,4 +612,36 @@ export function parseTraceFacts(trace: string): RationaleFact[] {
     })
   }
   return facts
+}
+
+/** Short critic / envelope flags for the lender queue. */
+export function extractReviewFlags(result: UnderwriteResult): string[] {
+  const flags: string[] = []
+  const seen = new Set<string>()
+  const add = (label: string) => {
+    const trimmed = label.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    flags.push(trimmed)
+  }
+
+  const routing = result.decision.program_routing ?? result.program_routing
+  if (routing && !routing.eligibility_gate_pass) add("Eligibility")
+  if (routing && !routing.compliance_floor_pass) add("Compliance")
+  if (result.decision.ceiling_triggered) add("Risk ceiling")
+  if (result.decision.risk_tier === "prohibited") add("Prohibited")
+  if (result.decision.risk_tier === "high") add("High risk")
+
+  const critic = result.subagent_outputs?.critic
+  if (critic?.hard_reject) add("Hard reject")
+  for (const section of result.decision.rationale?.sections ?? []) {
+    if (section.kind !== "critic" && section.kind !== "envelope") continue
+    for (const fact of section.facts ?? []) {
+      if (fact.tone === "fail") add(fact.label)
+    }
+  }
+  for (const action of result.decision.improvement_actions ?? []) {
+    if (action.priority === "high") add(action.title)
+  }
+  return flags.slice(0, 3)
 }

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client"
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister"
 
+import { useCaseSessionStore } from "@/stores/case-session-store"
 import { useRagSearchStore } from "@/stores/rag-search-store"
 import { useUnderwriteStore } from "@/stores/underwrite-store"
 
@@ -35,19 +36,23 @@ function getQueryClient() {
 
 type SyncPersister = ReturnType<typeof createSyncStoragePersister>
 
+function getPersister(): SyncPersister | null {
+  if (typeof window === "undefined") return null
+  return createSyncStoragePersister({
+    storage: window.localStorage,
+    key: "underwriting.playground.react-query",
+  })
+}
+
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = React.useState(() => getQueryClient())
   const [persister, setPersister] = React.useState<SyncPersister | null>(null)
 
   React.useEffect(() => {
-    setPersister(
-      createSyncStoragePersister({
-        storage: window.localStorage,
-        key: "underwriting.playground.react-query",
-      })
-    )
+    setPersister(getPersister())
     void useRagSearchStore.persist.rehydrate()
     void useUnderwriteStore.persist.rehydrate()
+    void useCaseSessionStore.persist.rehydrate()
   }, [])
 
   if (!persister) {

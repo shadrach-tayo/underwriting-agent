@@ -1,13 +1,11 @@
 "use client"
 
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { Search01Icon, SparklesIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { RagChatPanel } from "@/components/playground/rag-chat-panel"
 import { RagSearchPanel } from "@/components/playground/rag-search-panel"
-import { buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import type { PolicyRagMode } from "@/lib/rag"
 import { cn } from "@/lib/utils"
 import { useRagSearchStore } from "@/stores/rag-search-store"
@@ -15,70 +13,91 @@ import { useRagSearchStore } from "@/stores/rag-search-store"
 const MODES: {
   value: PolicyRagMode
   label: string
-  href: string
   icon: typeof Search01Icon
 }[] = [
-  { value: "search", label: "Search", href: "/playground/rag", icon: Search01Icon },
-  {
-    value: "chat",
-    label: "Chat",
-    href: "/playground/rag?mode=chat",
-    icon: SparklesIcon,
-  },
+  { value: "search", label: "Search", icon: Search01Icon },
+  { value: "chat", label: "Chat", icon: SparklesIcon },
 ]
 
-export function PolicyRagPlayground() {
-  const searchParams = useSearchParams()
-  const persistedMode = useRagSearchStore((s) => s.mode)
-  const setPersistedMode = useRagSearchStore((s) => s.setMode)
-  const urlMode = searchParams.get("mode")
-  const mode: PolicyRagMode =
-    urlMode === "chat" || urlMode === "search" ? urlMode : persistedMode
+export function PolicyRagPlayground({ compact = false }: { compact?: boolean }) {
+  const mode = useRagSearchStore((s) => s.mode)
+  const setMode = useRagSearchStore((s) => s.setMode)
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Policy RAG
-        </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Two distinct modes: dense retrieval over the policy corpus, or a
-          streaming generate chat with sources from{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
-            RagPipeline.generate
-          </code>
-          .
-        </p>
-      </div>
+    <div
+      className={cn(
+        compact
+          ? "flex h-full min-h-0 flex-col gap-4 px-4 pt-4 pb-0"
+          : "space-y-6"
+      )}
+    >
+      {compact ? null : (
+        <>
+          <div className="space-y-2">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              Ask AI
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              Search the policy corpus, or ask a question that returns the clause
+              it used. Same retrieve-and-generate path as underwriting.
+            </p>
+          </div>
+          <div
+            role="tablist"
+            aria-label="Ask AI mode"
+            className="inline-flex w-fit shrink-0 items-center gap-1 rounded-lg bg-muted p-0.75"
+          >
+            {MODES.map((item) => {
+              const selected = mode === item.value
+              return (
+                <Button
+                  key={item.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMode(item.value)}
+                  className={cn(
+                    "gap-1.5",
+                    selected && "bg-background text-foreground shadow-sm"
+                  )}
+                >
+                  <HugeiconsIcon icon={item.icon} strokeWidth={2} />
+                  {item.label}
+                </Button>
+              )
+            })}
+          </div>
+        </>
+      )}
 
-      <div
-        role="tablist"
-        aria-label="Policy RAG mode"
-        className="inline-flex w-fit items-center gap-1 rounded-lg bg-muted p-[3px]"
-      >
-        {MODES.map((item) => {
-          const selected = mode === item.value
-          return (
-            <Link
-              key={item.value}
-              href={item.href}
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setPersistedMode(item.value)}
+      <div className={cn(compact && "flex min-h-0 flex-1 flex-col")}>
+        {compact ? (
+          <>
+            <div
               className={cn(
-                buttonVariants({ variant: "ghost", size: "sm" }),
-                "gap-1.5 no-underline",
-                selected && "bg-background text-foreground shadow-sm"
+                "flex min-h-0 flex-1 flex-col",
+                mode !== "chat" && "hidden"
               )}
             >
-              <HugeiconsIcon icon={item.icon} strokeWidth={2} />
-              {item.label}
-            </Link>
-          )
-        })}
+              <RagChatPanel compact />
+            </div>
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 flex-col",
+                mode !== "search" && "hidden"
+              )}
+            >
+              <RagSearchPanel compact />
+            </div>
+          </>
+        ) : mode === "chat" ? (
+          <RagChatPanel />
+        ) : (
+          <RagSearchPanel />
+        )}
       </div>
-
-      {mode === "chat" ? <RagChatPanel /> : <RagSearchPanel />}
     </div>
   )
 }
