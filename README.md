@@ -2,6 +2,10 @@
 
 Agentic underwriting for SME loans: auto-decide inside a defined confidence and risk envelope, escalate everything else with a citation-grounded reasoning trace. A **hard-coded risk ceiling** in application code prevents any case above threshold from being auto-approved, regardless of model confidence.
 
+![Walk through Cedar Ridge from apply to officer decision](./docs/demo.gif)
+
+The playground is two seats on one labeled file. An applicant fills `/apply` and watches `/portal`. An officer reviews the same case on `/playground/underwrite`, opens the cited clauses, and records approve / deny / escalate. **Walk through** on the landing page runs that loop on Cedar Ridge Fabrication (`gold-001`). Ask AI is the same Policy RAG path as underwriting, in a sheet.
+
 ## Stack
 
 | Layer | Choice |
@@ -14,7 +18,7 @@ Agentic underwriting for SME loans: auto-decide inside a defined confidence and 
 | Evals | DeepEval + Braintrust (+ RAGAS when importable) |
 | Observability | Braintrust (evals) + LangSmith (LangGraph) + Prometheus / Grafana |
 | Package / env | **uv** (`.venv`) |
-| Web UI | Next.js + shadcn (`web/`) |
+| Web UI | Next.js + shadcn (`web/`) — apply, portal, officer desk, Ask AI |
 | CI | GitHub Actions — pytest + false-approve hard gate |
 | Metrics | `GET /metrics` (JSON) + `GET /prometheus` + Grafana on :3300 |
 
@@ -44,9 +48,9 @@ src/
   evals/          # Eval suite (Week 4)
   models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
-web/              # Next.js console — Admin (RAG) + Playground (agents)
+web/              # Next.js demo — apply, portal, officer desk, Ask AI
 data/             # Local only (gitignored) — policy PDFs, gold set, lenders
-docs/             # System design + RUNBOOK + OBSERVABILITY
+docs/             # System design, RUNBOOK, OBSERVABILITY, demo.gif
 prometheus/       # scrape config (profile: observability)
 grafana/          # provisioned Underwriting API dashboard
 terraform/        # AWS ECS + RDS (configured, not applied — demo is local)
@@ -86,7 +90,7 @@ uv run underwriting-evals --mode graph --judge skip --fail-on-gate
 # curl -X POST http://127.0.0.1:8080/admin/rag/ingest -H 'Content-Type: application/json' -d '{}'
 # curl http://127.0.0.1:8080/admin/rag/status
 
-# Web console (Admin + Playground)
+# Web demo (apply, portal, officer desk). Admin is opt-in via NEXT_PUBLIC_SHOW_ADMIN.
 cd web && pnpm install && pnpm dev
 ```
 
