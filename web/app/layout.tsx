@@ -23,7 +23,7 @@ const fontMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Underwriting Agent",
   description:
-    "Demo of agentic underwriting for any kind of lending. Auto-decide inside the envelope, escalate the rest with a cited trace, and keep a hard-coded risk ceiling.",
+    "Agentic underwriting playground: walk a labeled SME file from application to officer decision, with auto-decide inside the envelope and a hard-coded risk ceiling.",
 }
 
 export default function RootLayout({

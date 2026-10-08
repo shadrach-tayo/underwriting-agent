@@ -5,12 +5,15 @@ import { usePathname, useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import {
+  DEMO_CITATION_HOLD_MS,
+  DEMO_CITATION_READY_MS,
   DEMO_HITL_CAUSE,
   DEMO_INTRO,
   DEMO_STEPS,
 } from "@/lib/demo-tour"
 import { cn } from "@/lib/utils"
 import { useCaseSessionStore } from "@/stores/case-session-store"
+import { useCitationViewerStore } from "@/stores/citation-viewer-store"
 import { useDemoTourStore } from "@/stores/demo-tour-store"
 import { useUnderwriteStore } from "@/stores/underwrite-store"
 
@@ -18,6 +21,15 @@ function wait(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms)
   })
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs: number) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return true
+    await wait(120)
+  }
+  return predicate()
 }
 
 type SpotlightBox = { top: number; left: number; width: number; height: number }
@@ -38,6 +50,8 @@ export function DemoTourHost() {
   const setBusy = useDemoTourStore((s) => s.setBusy)
   const setScoring = useDemoTourStore((s) => s.setScoring)
   const openCitation = useDemoTourStore((s) => s.openCitation)
+  const clearCitation = useDemoTourStore((s) => s.clearCitation)
+  const closeCitations = useCitationViewerStore((s) => s.close)
   const handlers = useDemoTourStore((s) => s.handlers)
   const recordHitl = useUnderwriteStore((s) => s.recordHitl)
   const lastOutcomes = useUnderwriteStore((s) => s.lastOutcomes)
@@ -45,6 +59,11 @@ export function DemoTourHost() {
   const step = DEMO_STEPS[stepIndex]
   const last = stepIndex === DEMO_STEPS.length - 1
   const onPage = Boolean(step && (!step.href || pathname === step.href))
+
+  React.useEffect(() => {
+    if (active && step?.action === "open-citation") return
+    closeCitations()
+  }, [active, closeCitations, step?.action])
 
   const syncedStep = React.useRef<number | null>(null)
   React.useEffect(() => {
@@ -100,8 +119,14 @@ export function DemoTourHost() {
         return
       }
       if (step.action === "open-citation") {
-        openCitation(0)
-        await wait(1600)
+        openCitation()
+        await waitUntil(
+          () => useCitationViewerStore.getState().previewReady,
+          DEMO_CITATION_READY_MS
+        )
+        await wait(DEMO_CITATION_HOLD_MS)
+        clearCitation()
+        closeCitations()
         next()
         return
       }
@@ -126,6 +151,8 @@ export function DemoTourHost() {
     last,
     lastOutcomes,
     next,
+    clearCitation,
+    closeCitations,
     openCitation,
     recordHitl,
     setBusy,

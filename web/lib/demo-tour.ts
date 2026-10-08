@@ -1,4 +1,5 @@
-import type { DecisionOutcome } from "@/lib/underwrite"
+import { citationFilename } from "@/lib/policy-source"
+import type { Citation, DecisionOutcome } from "@/lib/underwrite"
 
 export type DemoSpotlight =
   | "queue"
@@ -92,16 +93,16 @@ export const DEMO_STEPS: DemoStep[] = [
   {
     id: "approve-memo",
     title: "Each check points at a policy clause",
-    body: "Expected value next to what the case shows. Open a row to read the clause behind it.",
+    body: "Expected value next to what the case shows. The walkthrough opens the SBA SOP clause on the original Word file.",
     bullets: [
       "Policy checks sit beside the source clause",
-      "Opening a row shows the retrieved text",
+      "The original SOP stays on screen long enough to read",
     ],
-    tryIt: "Open a citation",
-    spotlight: "memo",
+    tryIt: "Open the SBA clause",
+    spotlight: "citations",
     href: "/playground/underwrite",
     action: "open-citation",
-    holdMs: 2200,
+    holdMs: 2400,
   },
   {
     id: "approve-hitl",
@@ -160,3 +161,25 @@ export const DEMO_FILE = {
   caseId: "gold-001",
   name: "Cedar Ridge Fabrication",
 } as const
+
+/** How long the SOP stays on screen after the original file paints. */
+export const DEMO_CITATION_HOLD_MS = 7000
+export const DEMO_CITATION_READY_MS = 15000
+
+/** Prefer the original SOP Word file over lender-policy PDFs in the walkthrough. */
+export function firstSbaCitationIndex(citations: Citation[]) {
+  let best = 0
+  let bestRank = -1
+  citations.forEach((citation, index) => {
+    const file = citationFilename(citation)
+    const hay = `${citation.source.title ?? ""} ${citation.source.name} ${file}`
+    const sop = /sop\s*50|sba sop/i.test(hay)
+    if (!sop) return
+    const rank = /\.docx?$/i.test(file) ? 2 : 1
+    if (rank > bestRank) {
+      bestRank = rank
+      best = index
+    }
+  })
+  return best
+}

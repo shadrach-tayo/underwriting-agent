@@ -2,22 +2,18 @@
 
 import * as React from "react"
 import dynamic from "next/dynamic"
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 
 import { SourceLink } from "@/components/playground/source-link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   citationFilename,
   citationLabel,
   citationPage,
+  isDocxSource,
   isPdfSource,
   pdfPageNumber,
   policySourceFileUrl,
@@ -29,10 +25,41 @@ import { useDemoTourStore } from "@/stores/demo-tour-store"
 
 const CitationPdfPage = dynamic(() => import("@/components/playground/citation-pdf"), {
   ssr: false,
-  loading: () => (
-    <p className="px-1 py-8 text-sm text-muted-foreground">Loading page…</p>
-  ),
+  loading: () => <CitationDocSkeleton />,
 })
+
+const CitationDocxPreview = dynamic(
+  () => import("@/components/playground/citation-docx"),
+  {
+    ssr: false,
+    loading: () => <CitationDocSkeleton />,
+  }
+)
+
+function CitationDocSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-[min(52vh,28rem)] flex-col gap-3 rounded-lg border bg-background p-6",
+        className
+      )}
+      aria-hidden
+    >
+      <Skeleton className="h-3 w-1/3" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-[92%]" />
+      <Skeleton className="h-3 w-[86%]" />
+      <Skeleton className="mt-3 h-3 w-2/3" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-[90%]" />
+      <Skeleton className="h-3 w-[78%]" />
+      <Skeleton className="mt-3 h-3 w-1/2" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-[94%]" />
+      <Skeleton className="min-h-36 flex-1 w-full" />
+    </div>
+  )
+}
 
 export function CitationChips({
   citations,
@@ -90,112 +117,248 @@ export function CitationDrawer({
   openIndex: number | null
   onOpenChange: (index: number | null) => void
 }) {
+  const markReady = useCitationViewerStore((s) => s.markReady)
   const citation = openIndex == null ? null : (citations[openIndex] ?? null)
+  const lastCitation = React.useRef<Citation | null>(null)
+  if (citation) lastCitation.current = citation
+  const view = citation ?? lastCitation.current
+  const open = citation != null
+
   const count = citations.length
-  const page = citation ? citationPage(citation) : null
-  const file = citation ? citationFilename(citation) : ""
-  const showPdf = Boolean(citation && isPdfSource(file))
+  const page = view ? citationPage(view) : null
+  const file = view ? citationFilename(view) : ""
+  const showPdf = Boolean(view && isPdfSource(file))
+  const showDocx = Boolean(view && isDocxSource(file))
+  const showOriginal = Boolean(file && (showPdf || showDocx))
+  const fileUrl = file ? policySourceFileUrl(file) : ""
+
+  const pdfKeep = React.useRef<{ file: string; url: string } | null>(null)
+  const docxKeep = React.useRef<{ file: string; url: string } | null>(null)
+  const lastPdf = React.useRef({ page: 1, snippet: "" })
+  const lastDocx = React.useRef({ snippet: "" })
+  const fileRef = React.useRef(file)
+  fileRef.current = file
+  if (view && isPdfSource(file)) {
+    pdfKeep.current = { file, url: fileUrl }
+    lastPdf.current = {
+      page: pdfPageNumber(page),
+      snippet: view.retrieved_text,
+    }
+  }
+  if (view && isDocxSource(file)) {
+    docxKeep.current = { file, url: fileUrl }
+    lastDocx.current = { snippet: view.retrieved_text }
+  }
+
+  const [seenOpen, setSeenOpen] = React.useState(open)
+  const [allowHeavy, setAllowHeavy] = React.useState(false)
+  const [revealedFile, setRevealedFile] = React.useState<string | null>(null)
+  if (open !== seenOpen) {
+    setSeenOpen(open)
+    if (open) setRevealedFile(null)
+  }
+
+  const showSkeleton = Boolean(
+    open && showOriginal && (revealedFile !== file || !allowHeavy)
+  )
+
+  React.useEffect(() => {
+    if (!open) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onOpenChange(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onOpenChange])
+
+  React.useEffect(() => {
+    if (!open || allowHeavy) return
+    const frame = requestAnimationFrame(() => setAllowHeavy(true))
+    return () => cancelAnimationFrame(frame)
+  }, [open, allowHeavy])
+
+  const handleDocReady = React.useCallback(() => {
+    if (!fileRef.current) return
+    setRevealedFile(fileRef.current)
+    markReady()
+  }, [markReady])
+
+  React.useEffect(() => {
+    if (!open || showOriginal) return
+    markReady()
+  }, [markReady, open, showOriginal])
+
+  if (!view) return null
+
+  const pdfVisible = open && showPdf
+  const docxVisible = open && showDocx
 
   return (
-    <Sheet
-      open={openIndex != null && citation != null}
-      onOpenChange={(open) => {
-        if (!open) onOpenChange(null)
-      }}
-    >
-      <SheetContent
-        side="right"
-        className="h-dvh w-full gap-0 overflow-hidden p-0 data-[side=right]:w-[min(100vw,48rem)] data-[side=right]:sm:max-w-3xl"
+    <>
+      {open ? (
+        <button
+          type="button"
+          aria-label="Close citation"
+          className="fixed inset-0 z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs"
+          onClick={() => onOpenChange(null)}
+        />
+      ) : null}
+      <div
+        role="dialog"
+        aria-modal={open}
+        aria-hidden={!open}
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex h-dvh w-[min(100vw,48rem)] max-w-3xl flex-col gap-0 overflow-hidden border-s bg-popover text-sm text-popover-foreground shadow-lg",
+          !open && "hidden"
+        )}
       >
-        {citation ? (
-          <>
-            <SheetHeader className="shrink-0 border-b border-border/80">
-              <SheetTitle className="pr-10 text-base leading-snug">
-                {citation.source.title || citation.source.name}
-              </SheetTitle>
-              <SheetDescription>
-                {formatProgram(citation.program)}
-                {page != null ? ` · p.${pdfPageNumber(page)}` : ""}
-                {count > 1 && openIndex != null
-                  ? ` · ${openIndex + 1} of ${count}`
-                  : ""}
-              </SheetDescription>
-            </SheetHeader>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">
-                  {formatStatusLabel(citation.source.authority)}
-                </Badge>
-                <Badge variant="outline">
-                  sim {citation.similarity_score.toFixed(2)}
-                </Badge>
-                {citation.grounded != null ? (
-                  <Badge variant={citation.grounded ? "secondary" : "outline"}>
-                    {citation.grounded ? "Grounded" : "Ungrounded"}
-                  </Badge>
-                ) : null}
-              </div>
-              {showPdf ? (
-                <CitationPdfPage
-                  key={`${file}-${pdfPageNumber(page)}`}
-                  fileUrl={policySourceFileUrl(file)}
-                  pageNumber={pdfPageNumber(page)}
-                  snippet={citation.retrieved_text}
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  This source is a Word SOP, not a paginated PDF, so the clause
-                  text is shown instead of a source page.
-                </p>
-              )}
-              <p
-                className={cn(
-                  "text-sm leading-relaxed",
-                  showPdf && "rounded-lg bg-muted/50 p-3 text-muted-foreground"
-                )}
-              >
-                {citation.retrieved_text || "No clause text retrieved."}
-              </p>
-            </div>
-            <SheetFooter className="shrink-0 border-t border-border/80">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-3">
-                  {showPdf ? (
-                    <SourceLink href={policySourceFileUrl(file)}>
-                      Open full document
-                    </SourceLink>
+        <div className="flex shrink-0 flex-col gap-0.5 border-b border-border/80 p-4">
+          <h2 className="pr-10 font-heading text-base font-medium leading-snug text-foreground">
+            {view.source.title || view.source.name}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {formatProgram(view.program)}
+            {showPdf && page != null ? ` · p.${pdfPageNumber(page)}` : ""}
+            {showDocx ? " · Word" : ""}
+            {count > 1 && openIndex != null
+              ? ` · ${openIndex + 1} of ${count}`
+              : ""}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="absolute top-3 end-3"
+          onClick={() => onOpenChange(null)}
+        >
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          <span className="sr-only">Close</span>
+        </Button>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {formatStatusLabel(view.source.authority)}
+            </Badge>
+            <Badge variant="outline">
+              sim {view.similarity_score.toFixed(2)}
+            </Badge>
+            {view.grounded != null ? (
+              <Badge variant={view.grounded ? "secondary" : "outline"}>
+                {view.grounded ? "Grounded" : "Ungrounded"}
+              </Badge>
+            ) : null}
+          </div>
+          {showOriginal ? (
+            <div
+              className="relative min-h-[min(52vh,28rem)]"
+              aria-busy={showSkeleton}
+            >
+              {showSkeleton ? (
+                <CitationDocSkeleton className="absolute inset-0 z-10" />
+              ) : null}
+              {allowHeavy ? (
+                <>
+                  {pdfKeep.current ? (
+                    <div
+                      className={cn(
+                        !pdfVisible && "hidden",
+                        pdfVisible && showSkeleton && "invisible"
+                      )}
+                    >
+                      <CitationPdfPage
+                        key={pdfKeep.current.file}
+                        fileUrl={pdfKeep.current.url}
+                        pageNumber={
+                          pdfVisible
+                            ? pdfPageNumber(page)
+                            : lastPdf.current.page
+                        }
+                        snippet={
+                          pdfVisible
+                            ? view.retrieved_text
+                            : lastPdf.current.snippet
+                        }
+                        active={pdfVisible}
+                        onReady={handleDocReady}
+                      />
+                    </div>
                   ) : null}
-                  <SourceLink href={citation.source.url}>
-                    {showPdf ? "Origin URL" : "Open source"}
-                  </SourceLink>
-                </div>
-                {count > 1 && openIndex != null ? (
-                  <div className="flex gap-1.5">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        onOpenChange((openIndex - 1 + count) % count)
-                      }
+                  {docxKeep.current ? (
+                    <div
+                      className={cn(
+                        (!docxVisible || showSkeleton) && "hidden"
+                      )}
                     >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onOpenChange((openIndex + 1) % count)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                ) : null}
+                      <CitationDocxPreview
+                        key={docxKeep.current.file}
+                        fileUrl={docxKeep.current.url}
+                        snippet={
+                          docxVisible
+                            ? view.retrieved_text
+                            : lastDocx.current.snippet
+                        }
+                        active={docxVisible}
+                        visible={docxVisible && !showSkeleton}
+                        onReady={handleDocReady}
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {!showPdf && !showDocx ? (
+            <p className="text-xs text-muted-foreground">
+              This catalog file is not a PDF or Word document, so the clause
+              text is shown instead.
+            </p>
+          ) : null}
+          <p
+            className={cn(
+              "text-sm leading-relaxed",
+              showOriginal &&
+                "rounded-lg bg-muted/50 p-3 text-muted-foreground"
+            )}
+          >
+            {view.retrieved_text || "No clause text retrieved."}
+          </p>
+        </div>
+        <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-border/80 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-3">
+              {file ? (
+                <SourceLink href={policySourceFileUrl(file, page)}>
+                  Open full document
+                </SourceLink>
+              ) : null}
+              <SourceLink href={view.source.url}>Origin URL</SourceLink>
+            </div>
+            {count > 1 && openIndex != null ? (
+              <div className="flex gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    onOpenChange((openIndex - 1 + count) % count)
+                  }
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenChange((openIndex + 1) % count)}
+                >
+                  Next
+                </Button>
               </div>
-            </SheetFooter>
-          </>
-        ) : null}
-      </SheetContent>
-    </Sheet>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </>
   )
 }

@@ -6,6 +6,11 @@ import { Document, Page, pdfjs } from "react-pdf"
 import "react-pdf/dist/Page/AnnotationLayer.css"
 import "react-pdf/dist/Page/TextLayer.css"
 
+import {
+  loadPolicySourceBlob,
+  peekPolicySourceBlob,
+} from "@/lib/policy-source-cache"
+
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs"
 
 const PDF_OPTIONS = { withCredentials: false as const }
@@ -21,14 +26,52 @@ export default function CitationPdfPage({
   fileUrl,
   pageNumber,
   snippet,
+  active = true,
+  onReady,
 }: {
   fileUrl: string
   pageNumber: number
   snippet: string
+  active?: boolean
+  onReady?: () => void
 }) {
   const pageRef = React.useRef<HTMLDivElement>(null)
+  const snippetRef = React.useRef(snippet)
+  snippetRef.current = snippet
+  const onReadyRef = React.useRef(onReady)
+  onReadyRef.current = onReady
+  const paintedFile = React.useRef<string | null>(null)
+  const [file, setFile] = React.useState<Blob | null>(
+    () => peekPolicySourceBlob(fileUrl) ?? null
+  )
   const [boxes, setBoxes] = React.useState<HighlightBox[]>([])
   const [width, setWidth] = React.useState(720)
+  const [painted, setPainted] = React.useState(false)
+
+  React.useEffect(() => {
+    const cached = peekPolicySourceBlob(fileUrl)
+    if (cached) {
+      setFile(cached)
+      return
+    }
+    let cancelled = false
+    setFile(null)
+    loadPolicySourceBlob(fileUrl)
+      .then((blob) => {
+        if (!cancelled) setFile(blob)
+      })
+      .catch(() => {
+        if (!cancelled) setFile(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fileUrl])
+
+  React.useEffect(() => {
+    paintedFile.current = null
+    setPainted(false)
+  }, [fileUrl])
 
   React.useEffect(() => {
     const node = pageRef.current?.parentElement
@@ -59,22 +102,41 @@ export default function CitationPdfPage({
     const spans = [
       ...root.querySelectorAll(".react-pdf__Page__textContent span"),
     ] as HTMLElement[]
-    setBoxes(boxesForSnippet(root, spans, snippet))
+    setBoxes(boxesForSnippet(root, spans, snippetRef.current))
+  }
+
+  React.useEffect(() => {
+    setBoxes([])
+    markSnippet()
+  }, [pageNumber, snippet])
+
+  React.useEffect(() => {
+    if (!active || !painted || paintedFile.current !== fileUrl) return
+    onReadyRef.current?.()
+  }, [active, painted, fileUrl])
+
+  function signalReady() {
+    paintedFile.current = fileUrl
+    setPainted(true)
+    if (active) onReadyRef.current?.()
+  }
+
+  if (!file) {
+    return <div className="min-h-[min(52vh,28rem)]" />
   }
 
   return (
     <div ref={pageRef} className="relative overflow-auto">
       <Document
-        file={fileUrl}
+        file={file}
         options={PDF_OPTIONS}
-        loading={
-          <p className="px-1 py-8 text-sm text-muted-foreground">Loading page…</p>
-        }
+        loading={null}
         error={
           <p className="px-1 py-8 text-sm text-destructive">
             Could not load this PDF. The clause text is below.
           </p>
         }
+        onLoadError={() => signalReady()}
         suspense={false}
       >
         <Page
@@ -82,10 +144,9 @@ export default function CitationPdfPage({
           width={width}
           renderAnnotationLayer={false}
           renderTextLayer
+          onRenderSuccess={signalReady}
           onRenderTextLayerSuccess={markSnippet}
-          loading={
-            <p className="px-1 py-8 text-sm text-muted-foreground">Rendering page…</p>
-          }
+          loading={null}
         />
       </Document>
       {boxes.map((box, index) => (

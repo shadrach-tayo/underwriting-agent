@@ -4,8 +4,23 @@ import type { Citation } from "@/lib/underwrite"
 
 const PAGE_IN_CLAUSE = /:p(\d+)$/i
 
+export function sourceExtension(name: string | null | undefined) {
+  const file = filenameFromSource(name).toLowerCase()
+  const dot = file.lastIndexOf(".")
+  return dot >= 0 ? file.slice(dot + 1) : ""
+}
+
 export function isPdfSource(name: string | null | undefined) {
-  return Boolean(filenameFromSource(name)?.toLowerCase().endsWith(".pdf"))
+  return sourceExtension(name) === "pdf"
+}
+
+export function isDocxSource(name: string | null | undefined) {
+  const ext = sourceExtension(name)
+  return ext === "docx" || ext === "doc"
+}
+
+export function canPreviewSource(name: string | null | undefined) {
+  return isPdfSource(name) || isDocxSource(name)
 }
 
 function filenameFromSource(value: string | null | undefined) {
@@ -29,8 +44,15 @@ export function citationFilename(
   return filenameFromSource(citation.source.name)
 }
 
-export function policySourceFileUrl(filename: string) {
-  return `${apiBase()}/policy-sources/${encodeURIComponent(filename)}`
+export function policySourceFileUrl(
+  filename: string,
+  page?: number | null
+) {
+  const url = `${apiBase()}/policy-sources/${encodeURIComponent(filename)}`
+  if (!isPdfSource(filename) || page == null || !Number.isFinite(page)) {
+    return url
+  }
+  return `${url}#page=${pdfPageNumber(page)}`
 }
 
 export function citationPage(citation: Pick<Citation, "page" | "clause_id">) {
@@ -50,6 +72,7 @@ export function citationLabel(citation: Citation) {
   const title =
     citation.source.title?.trim() ||
     citation.source.name.replace(/\.[^.]+$/, "")
+  if (!isPdfSource(citationFilename(citation))) return title
   const page = citationPage(citation)
   return page != null ? `${title} · p.${pdfPageNumber(page)}` : title
 }

@@ -22,15 +22,15 @@ export function HomeLanding() {
       <div className="relative mx-auto flex max-w-6xl flex-col gap-20 px-4 py-16 sm:px-6 sm:py-24">
         <section className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
           <p className="font-heading text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-            Demo
+            Demo console
           </p>
           <h1 className="font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-            Auto-decide inside the envelope. Escalate every other case.
+            Agentic underwriting playground
           </h1>
           <p className="max-w-xl text-base leading-relaxed text-muted-foreground text-pretty">
-            Agentic underwriting for any kind of lending. Clear cases decide
-            themselves. The rest go to a person with a cited trace, and the
-            risk ceiling is hard-coded.
+            Walk a labeled SME file from application to officer decision. Clear
+            cases auto-decide inside the envelope. The rest escalate with a
+            cited trace, and the risk ceiling is hard-coded.
           </p>
           <div className="flex flex-col items-center gap-3">
             <div className="flex flex-wrap items-center justify-center gap-3">

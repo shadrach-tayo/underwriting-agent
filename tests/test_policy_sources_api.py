@@ -46,3 +46,17 @@ def test_policy_source_serves_catalogued_pdf(tmp_path: Path) -> None:
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("application/pdf")
     assert res.content.startswith(b"%PDF")
+
+
+def test_policy_source_serves_catalogued_docx(tmp_path: Path) -> None:
+    docx = tmp_path / "SOP 50 10 8.1 effective 10.1.2026_0.docx"
+    docx.write_bytes(b"PK\x03\x04docx")
+    with patch("http_api.sources.resolve_catalog_file", return_value=docx):
+        client = TestClient(create_app())
+        res = client.get(
+            "/policy-sources/SOP%2050%2010%208.1%20effective%2010.1.2026_0.docx"
+        )
+    assert res.status_code == 200
+    assert "wordprocessingml" in res.headers["content-type"]
+    assert res.headers["content-disposition"].startswith("inline")
+    assert res.content.startswith(b"PK")

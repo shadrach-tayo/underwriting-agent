@@ -29,7 +29,7 @@ type DemoTourState = {
   setAutoplay: (autoplay: boolean) => void
   setBusy: (busy: boolean) => void
   setScoring: (scoring: boolean) => void
-  openCitation: (index: number) => void
+  openCitation: (index?: number) => void
   clearCitation: () => void
   registerHandlers: (partial: Partial<ApplyHandlers>) => void
 }
@@ -107,7 +107,8 @@ export const useDemoTourStore = create<DemoTourState>((set, get) => ({
   setAutoplay: (autoplay) => set({ autoplay }),
   setBusy: (busy) => set({ busy }),
   setScoring: (scoring) => set({ scoring }),
-  openCitation: (index) => set({ citationIndex: index }),
+  openCitation: () =>
+    set((state) => ({ citationIndex: (state.citationIndex ?? 0) + 1 })),
   clearCitation: () => set({ citationIndex: null }),
   registerHandlers: (partial) =>
     set((state) => ({

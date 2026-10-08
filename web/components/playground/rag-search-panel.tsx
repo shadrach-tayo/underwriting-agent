@@ -35,7 +35,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useRagSearchQuery } from "@/hooks/use-rag-search"
-import { isPdfSource } from "@/lib/policy-source"
+import { canPreviewSource } from "@/lib/policy-source"
 import { hitKey, type RagHit } from "@/lib/rag"
 import { formatLender, formatProgram } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
@@ -409,14 +409,14 @@ function ResultsSection({
                       >
                         {hit.title || hit.source || sourceLabel(hit.source)}
                       </SourceLink>
-                      {isPdfSource(hit.source) ? (
+                      {canPreviewSource(hit.source) ? (
                         <Button
                           type="button"
                           variant="ghost"
                           size="xs"
                           onClick={() => openHitsViewer(result.hits, index)}
                         >
-                          View page
+                          View source
                         </Button>
                       ) : null}
                     </div>

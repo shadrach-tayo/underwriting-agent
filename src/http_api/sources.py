@@ -11,6 +11,12 @@ from policy_rag.catalog import resolve_catalog_file
 
 router = APIRouter(tags=["policy-sources"])
 
+_MIME_BY_SUFFIX = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+}
+
 
 @router.get("/policy-sources/{filename}")
 def get_policy_source(filename: str) -> FileResponse:
@@ -20,9 +26,10 @@ def get_policy_source(filename: str) -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Unknown or missing policy source.",
         )
-    media_type, _ = mimetypes.guess_type(path.name)
-    if path.suffix.lower() == ".pdf":
-        media_type = "application/pdf"
+    suffix = path.suffix.lower()
+    media_type = _MIME_BY_SUFFIX.get(suffix)
+    if media_type is None:
+        media_type, _ = mimetypes.guess_type(path.name)
     return FileResponse(
         path,
         media_type=media_type or "application/octet-stream",

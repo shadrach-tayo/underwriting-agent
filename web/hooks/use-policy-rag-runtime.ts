@@ -20,6 +20,14 @@ function textFromMessage(message: ThreadMessage): string {
     .trim()
 }
 
+function mergeReasoning(prev: string, next: string) {
+  if (!next) return prev
+  if (!prev) return next
+  if (next.startsWith(prev)) return next
+  if (prev.endsWith(next)) return prev
+  return prev + next
+}
+
 function sourceParts(hits: RagHit[]): ThreadAssistantMessagePart[] {
   return hits.map((hit, index) =>
     hit.url
@@ -62,18 +70,22 @@ export function usePolicyRagRuntime() {
         let reasoning = ""
         let text = ""
         let sources: ThreadAssistantMessagePart[] = []
+        let ragHits: RagHit[] = []
 
-        const snapshot = (): ChatModelRunResult => ({
+        const snapshot = (running = true): ChatModelRunResult => ({
           content: [
-            ...(reasoning ? [{ type: "reasoning" as const, text: reasoning }] : []),
-            ...sources,
+            ...(running || reasoning
+              ? [{ type: "reasoning" as const, text: reasoning }]
+              : []),
             ...(text ? [{ type: "text" as const, text }] : []),
+            ...sources,
           ],
+          metadata: {
+            custom: { ragHits },
+          },
         })
 
-        yield {
-          content: [{ type: "reasoning", text: "Retrieving policy clauses…" }],
-        }
+        yield snapshot()
 
         const history = messages
           .filter((message) => message.role === "user" || message.role === "assistant")
@@ -88,23 +100,18 @@ export function usePolicyRagRuntime() {
           abortSignal
         )) {
           if (event.type === "status") {
-            reasoning = event.text
             yield snapshot()
             continue
           }
           if (event.type === "sources") {
+            ragHits = event.hits
             sources = sourceParts(event.hits)
-            useRagSearchStore.getState().setLastHits(event.hits)
-            if (!reasoning) {
-              reasoning = event.hits.length
-                ? `Using ${event.hits.length} retrieved source${event.hits.length === 1 ? "" : "s"}.`
-                : "No matching policy chunks. Answering from the unfiltered generate context if available."
-            }
+            useRagSearchStore.getState().setHitsForQuery(query, event.hits)
             yield snapshot()
             continue
           }
           if (event.type === "reasoning") {
-            reasoning += event.text
+            reasoning = mergeReasoning(reasoning, event.text)
             yield snapshot()
             continue
           }
@@ -121,7 +128,7 @@ export function usePolicyRagRuntime() {
         if (!text && !sources.length) {
           throw new Error("The model returned an empty answer.")
         }
-        yield snapshot()
+        yield snapshot(false)
       },
     }),
     []

@@ -28,14 +28,16 @@ import {
   askQuestionBoxClassName,
 } from "@/components/assistant-ui/ask-question-box"
 import { Reasoning } from "@/components/assistant-ui/reasoning"
-import { Sources } from "@/components/assistant-ui/sources"
+import { AssistantSources } from "@/components/assistant-ui/sources"
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui"
 import { Markdown } from "@/components/markdown"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const MarkdownText: TextMessagePartComponent = ({ text }) => (
-  <Markdown>{text}</Markdown>
+  <div className="min-w-0">
+    <Markdown>{text}</Markdown>
+  </div>
 )
 
 export function PolicyThread({
@@ -131,14 +133,15 @@ const UserMessage: FC = () => (
 
 const AssistantMessage: FC = () => (
   <MessagePrimitive.Root className="space-y-3">
-    <div className="text-sm leading-relaxed">
+    <div className="space-y-3 text-sm leading-relaxed">
       <MessagePrimitive.Parts
         components={{
           Text: MarkdownText,
           Reasoning,
-          Source: Sources,
+          Source: () => null,
         }}
       />
+      <AssistantSources />
     </div>
     <MessageError />
     <AssistantActionBar />

@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useGoldSetQuery } from "@/hooks/use-gold-set"
-import { DEMO_STEPS } from "@/lib/demo-tour"
+import { DEMO_STEPS, firstSbaCitationIndex } from "@/lib/demo-tour"
 import {
   formatCurrency,
   formatLender,
@@ -349,7 +349,7 @@ export function UnderwriteResultView({
 
   React.useEffect(() => {
     if (tourCitation == null || !result?.citations.length) return
-    openCitations(result.citations, tourCitation)
+    openCitations(result.citations, firstSbaCitationIndex(result.citations))
   }, [openCitations, result, tourCitation])
 
   if (loading && !result) {

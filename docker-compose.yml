@@ -51,12 +51,16 @@ services:
       LANGSMITH_TRACING: "false"
       LANGCHAIN_TRACING_V2: "false"
       BRAINTRUST_TRACING: "false"
+      # Prefer the mounted tree over a stale image copy of http_api.
+      PYTHONPATH: /app/src
     volumes:
       # Gold set is gitignored and excluded from the image context. Mount the
       # local file so /gold-set works without a rebuild.
       - ./data/gold_set:/app/data/gold_set:ro
       # Policy PDFs for GET /policy-sources/{filename} (citation viewer).
       - ./data/policy_sources:/app/data/policy_sources:ro
+      # Pick up /policy-sources without rebuilding the torch-heavy image.
+      - ./src:/app/src:ro
     depends_on:
       postgres:
         condition: service_healthy

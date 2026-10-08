@@ -22,6 +22,7 @@ type RagSearchState = {
   activeSearch: RagSearchParams | null
   openHits: Record<string, boolean>
   lastHits: RagHit[]
+  hitsByQuery: Record<string, RagHit[]>
   setMode: (mode: PolicyRagMode) => void
   setQuery: (query: string) => void
   setProgram: (program: ProgramLayer) => void
@@ -33,6 +34,7 @@ type RagSearchState = {
   setOpenHits: (openHits: Record<string, boolean>) => void
   primeOpenHits: (hits: RagHit[]) => void
   setLastHits: (hits: RagHit[]) => void
+  setHitsForQuery: (query: string, hits: RagHit[]) => void
   expandAllHits: (hits: RagHit[]) => void
   collapseAllHits: () => void
 }
@@ -51,6 +53,7 @@ export const useRagSearchStore = create<RagSearchState>()(
       activeSearch: null,
       openHits: {},
       lastHits: [],
+      hitsByQuery: {},
       setMode: (mode) => set({ mode }),
       setQuery: (query) => set({ query }),
       setProgram: (program) => set({ program }),
@@ -91,6 +94,11 @@ export const useRagSearchStore = create<RagSearchState>()(
       },
       collapseAllHits: () => set({ openHits: {} }),
       setLastHits: (lastHits) => set({ lastHits }),
+      setHitsForQuery: (query, hits) =>
+        set((state) => ({
+          lastHits: hits,
+          hitsByQuery: { ...state.hitsByQuery, [query]: hits },
+        })),
     }),
     {
       name: "underwriting.playground.rag.v3",
