@@ -21,6 +21,7 @@ export type RagHit = {
   url?: string | null
   title?: string | null
   lender_id?: string | null
+  page?: number | null
 }
 
 export type RagSearchResponse = {

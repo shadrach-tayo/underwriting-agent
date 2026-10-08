@@ -15,6 +15,7 @@ from http_api.middleware import PrometheusHttpMiddleware, RequestIdMiddleware
 from http_api.prometheus import PROMETHEUS_CONTENT_TYPE, render_prometheus
 from http_api.rag import router as rag_router
 from http_api.schemas import HealthResponse, MetricsResponse, ReadyResponse
+from http_api.sources import router as sources_router
 from http_api.underwrite import router as underwrite_router
 from version import __version__
 
@@ -40,12 +41,19 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=[
+            "Accept-Ranges",
+            "Content-Range",
+            "Content-Length",
+            "Content-Disposition",
+        ],
     )
     # Last added runs first. Request ID should wrap the handler before metrics.
     application.add_middleware(PrometheusHttpMiddleware)
     application.add_middleware(RequestIdMiddleware)
     application.include_router(admin_rag_router)
     application.include_router(rag_router)
+    application.include_router(sources_router)
     application.include_router(underwrite_router)
 
     @application.get("/health", response_model=HealthResponse)

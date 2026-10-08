@@ -58,6 +58,7 @@ def _hits_from_citations(citations: list[Any]) -> list[RagHit]:
                 url=cite.source.url,
                 title=cite.source.title,
                 lender_id=cite.source.lender_id,
+                page=cite.page,
                 metadata=meta,
             )
         )

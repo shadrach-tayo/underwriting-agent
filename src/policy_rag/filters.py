@@ -90,16 +90,46 @@ def ensure_regulatory_citations(
     """If primary has no regulatory evidence, prepend from ``pool`` (or primary)."""
     if any(is_regulatory_citation(c) for c in primary):
         return primary
+    extras = _take_matching(primary, pool, is_regulatory_citation, max_extra=max_extra)
+    return extras + primary if extras else primary
+
+
+def is_pdf_citation(cite: Citation) -> bool:
+    """True when the cited catalog file is a PDF the viewer can render."""
+    for value in (cite.source.name, cite.source.source_id, cite.clause_id):
+        stem = str(value or "").split(":", 1)[0].rsplit("/", 1)[-1].lower()
+        if stem.endswith(".pdf"):
+            return True
+    return False
+
+
+def ensure_pdf_citations(
+    primary: list[Citation],
+    pool: list[Citation],
+    *,
+    max_extra: int = 2,
+) -> list[Citation]:
+    """If primary is SOP/DOCX-only, prepend PDF pages from ``pool``."""
+    if any(is_pdf_citation(c) for c in primary):
+        return primary
+    extras = _take_matching(primary, pool, is_pdf_citation, max_extra=max_extra)
+    return extras + primary if extras else primary
+
+
+def _take_matching(
+    primary: list[Citation],
+    pool: list[Citation],
+    predicate,
+    *,
+    max_extra: int,
+) -> list[Citation]:
     seen = {c.clause_id for c in primary}
     extras: list[Citation] = []
     for cite in pool:
-        if cite.clause_id in seen:
+        if cite.clause_id in seen or not predicate(cite):
             continue
-        if is_regulatory_citation(cite):
-            extras.append(cite)
-            seen.add(cite.clause_id)
-            if len(extras) >= max_extra:
-                break
-    if not extras:
-        return primary
-    return extras + primary
+        extras.append(cite)
+        seen.add(cite.clause_id)
+        if len(extras) >= max_extra:
+            break
+    return extras

@@ -52,6 +52,7 @@ def test_citations_from_retrieval_maps_program_layer() -> None:
     assert citations[0].source.title == "12 CFR Part 202 (Regulation B)"
     assert citations[0].program == PolicyLayer.COMPLIANCE_FLOOR
     assert citations[0].similarity_score == 0.91
+    assert citations[0].page == 3
     assert "ECOA" in citations[0].retrieved_text
 
 
@@ -111,12 +112,24 @@ def test_citations_from_generate_maps_docs_and_context() -> None:
     )
     assert len(citations) == 1
     assert citations[0].program == PolicyLayer.COMPLIANCE_FLOOR
+    assert citations[0].page == 3
     assert "165" in citations[0].retrieved_text
     assert citations[0].source.authority == "regulatory"
 
 
 def test_citations_from_generate_empty_payload() -> None:
     assert citations_from_generate({"content": "none"}) == []
+
+
+def test_citations_from_retrieval_page_from_clause_id() -> None:
+    result = RetrievalResult(
+        docs=["SBSS minimum is 165."],
+        metadata=[{"source": "sop.pdf", "clause_id": "sop.pdf:p12", "score": 0.8}],
+        strategy="vector",
+        total=1,
+    )
+    citations = citations_from_retrieval(result)
+    assert citations[0].page == 12
 
 
 def test_llm_text_from_content_flattens_blocks() -> None:

@@ -55,6 +55,8 @@ services:
       # Gold set is gitignored and excluded from the image context. Mount the
       # local file so /gold-set works without a rebuild.
       - ./data/gold_set:/app/data/gold_set:ro
+      # Policy PDFs for GET /policy-sources/{filename} (citation viewer).
+      - ./data/policy_sources:/app/data/policy_sources:ro
     depends_on:
       postgres:
         condition: service_healthy

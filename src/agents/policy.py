@@ -71,9 +71,20 @@ def _outage_output(
     )
 
 
+_PDF_PAGE_QUERY = (
+    "12 CFR Part 202 Regulation B Equal Credit Opportunity Act adverse action. "
+    "Accion Opportunity Fund SBA 7(a) loan policy."
+)
+
+
 def _retrieve_citations_once(applicant: Applicant) -> list[Citation]:
     from policy_rag import citations_from_retrieval, get_policy_pipeline
-    from policy_rag.filters import ensure_regulatory_citations, filter_citations
+    from policy_rag.filters import (
+        ensure_pdf_citations,
+        ensure_regulatory_citations,
+        filter_citations,
+        is_pdf_citation,
+    )
 
     program = (
         applicant.requested_program.value if applicant.requested_program else None
@@ -90,7 +101,16 @@ def _retrieve_citations_once(applicant: Applicant) -> list[Citation]:
             lender_id=lender_id,
             include_shared_layers=True,
         )
-        return ensure_regulatory_citations(scoped, pool)
+        scoped = ensure_regulatory_citations(scoped, pool)
+        if not any(is_pdf_citation(c) for c in scoped):
+            pdf_result = pipeline.retrieve(_PDF_PAGE_QUERY, top_k=6)
+            pdf_pool = [
+                cite
+                for cite in citations_from_retrieval(pdf_result)
+                if is_pdf_citation(cite)
+            ]
+            scoped = ensure_pdf_citations(scoped, pdf_pool)
+        return scoped
     except DatabaseUnavailableError:
         raise
     except Exception as exc:  # noqa: BLE001

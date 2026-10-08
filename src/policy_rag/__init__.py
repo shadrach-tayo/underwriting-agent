@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -32,6 +33,7 @@ __all__ = [
 POLICY_INDEX = "underwriting_policy_chunk_512"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_EFFECTIVE = datetime(2026, 1, 1, tzinfo=UTC)
+_PAGE_IN_CLAUSE = re.compile(r":p(\d+)$", re.I)
 
 _LAYER_SYSTEM_PROMPT = """\
 You are an underwriting policy assistant for a dual-program CDFI lender.
@@ -172,6 +174,7 @@ def citations_from_retrieval(result: RetrievalResult) -> list[Citation]:
         source_name = str(meta.get("source") or meta.get("file") or "unknown")
         entry = lookup_source(source_name)
         clause_id = str(meta.get("clause_id") or f"{source_name}:p{meta.get('page', i)}")
+        page = _coerce_page(meta.get("page"), clause_id=clause_id)
         score = float(meta.get("score") or meta.get("similarity") or 0.0)
         similarity = max(0.0, min(1.0, score if 0.0 <= score <= 1.0 else 1.0 / (1.0 + abs(score))))
         program = _coerce_program(meta.get("program"), source_name)
@@ -209,9 +212,24 @@ def citations_from_retrieval(result: RetrievalResult) -> list[Citation]:
                 retrieved_text=text,
                 similarity_score=similarity,
                 program=program,
+                page=page,
             )
         )
     return citations
+
+
+def _coerce_page(raw: object, *, clause_id: str) -> int | None:
+    if isinstance(raw, bool):
+        raw = None
+    if isinstance(raw, (int, float)):
+        page = int(raw)
+        return page if page >= 0 else None
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    match = _PAGE_IN_CLAUSE.search(clause_id)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def _coerce_program(raw: object, source_name: str) -> PolicyLayer:

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Nunito_Sans } from "next/font/google"
 
 import { AskAiSheet } from "@/components/ask-ai-sheet"
 import { DemoTourHost } from "@/components/demo-tour-host"
+import { CitationViewerHost } from "@/components/playground/citation-drawer"
 import { SiteHeader } from "@/components/site-header"
 import { QueryProvider } from "@/components/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -52,6 +53,7 @@ export default function RootLayout({
                   <SiteHeader />
                   <main className="flex-1">{children}</main>
                   <AskAiSheet />
+                  <CitationViewerHost />
                   <DemoTourHost />
                 </div>
               </TooltipProvider>

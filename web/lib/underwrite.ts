@@ -133,6 +133,7 @@ export type Citation = {
   retrieved_text: string
   similarity_score: number
   program: string
+  page?: number | null
   grounding_score: number | null
   grounded: boolean | null
 }

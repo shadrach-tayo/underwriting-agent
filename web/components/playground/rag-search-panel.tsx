@@ -35,9 +35,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useRagSearchQuery } from "@/hooks/use-rag-search"
+import { isPdfSource } from "@/lib/policy-source"
 import { hitKey, type RagHit } from "@/lib/rag"
 import { formatLender, formatProgram } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
+import { useCitationViewerStore } from "@/stores/citation-viewer-store"
 import { useRagSearchStore } from "@/stores/rag-search-store"
 
 function scoreTone(score: number) {
@@ -271,6 +273,13 @@ function ResultsSection({
   expandAllHits: (hits: RagHit[]) => void
   collapseAllHits: () => void
 }) {
+  const setLastHits = useRagSearchStore((s) => s.setLastHits)
+  const openHitsViewer = useCitationViewerStore((s) => s.openHits)
+
+  React.useEffect(() => {
+    setLastHits(result.hits)
+  }, [result.hits, setLastHits])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -297,7 +306,7 @@ function ResultsSection({
               Retrieved chunks
             </h2>
             <p className="text-xs text-muted-foreground">
-              Expand a hit to read the full markdown passage.
+              Expand a hit to read the passage, or open the source page.
             </p>
           </div>
           {result.hits.length > 0 ? (
@@ -393,12 +402,24 @@ function ResultsSection({
                         )}
                       />
                     </CollapsibleTrigger>
-                    <SourceLink
-                      href={hit.url}
-                      className="block truncate px-4 pb-3 ps-13 font-mono text-[11px]"
-                    >
-                      {hit.title || hit.source || sourceLabel(hit.source)}
-                    </SourceLink>
+                    <div className="flex flex-wrap items-center gap-3 px-4 pb-3 ps-13">
+                      <SourceLink
+                        href={hit.url}
+                        className="block truncate font-mono text-[11px]"
+                      >
+                        {hit.title || hit.source || sourceLabel(hit.source)}
+                      </SourceLink>
+                      {isPdfSource(hit.source) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => openHitsViewer(result.hits, index)}
+                        >
+                          View page
+                        </Button>
+                      ) : null}
+                    </div>
                     <CollapsibleContent className="overflow-hidden data-open:animate-accordion-down data-closed:animate-accordion-up">
                       <div className="space-y-3 border-t border-border/70 px-4 py-3 ps-13">
                         <Markdown>{hit.text}</Markdown>

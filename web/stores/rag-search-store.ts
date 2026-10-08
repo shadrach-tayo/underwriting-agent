@@ -21,6 +21,7 @@ type RagSearchState = {
   /** Last submitted search — drives TanStack Query + survives navigation. */
   activeSearch: RagSearchParams | null
   openHits: Record<string, boolean>
+  lastHits: RagHit[]
   setMode: (mode: PolicyRagMode) => void
   setQuery: (query: string) => void
   setProgram: (program: ProgramLayer) => void
@@ -31,6 +32,7 @@ type RagSearchState = {
   setHitOpen: (key: string, open: boolean) => void
   setOpenHits: (openHits: Record<string, boolean>) => void
   primeOpenHits: (hits: RagHit[]) => void
+  setLastHits: (hits: RagHit[]) => void
   expandAllHits: (hits: RagHit[]) => void
   collapseAllHits: () => void
 }
@@ -48,6 +50,7 @@ export const useRagSearchStore = create<RagSearchState>()(
       topK: 5,
       activeSearch: null,
       openHits: {},
+      lastHits: [],
       setMode: (mode) => set({ mode }),
       setQuery: (query) => set({ query }),
       setProgram: (program) => set({ program }),
@@ -87,6 +90,7 @@ export const useRagSearchStore = create<RagSearchState>()(
         set({ openHits })
       },
       collapseAllHits: () => set({ openHits: {} }),
+      setLastHits: (lastHits) => set({ lastHits }),
     }),
     {
       name: "underwriting.playground.rag.v3",

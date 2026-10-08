@@ -94,6 +94,7 @@ export function usePolicyRagRuntime() {
           }
           if (event.type === "sources") {
             sources = sourceParts(event.hits)
+            useRagSearchStore.getState().setLastHits(event.hits)
             if (!reasoning) {
               reasoning = event.hits.length
                 ? `Using ${event.hits.length} retrieved source${event.hits.length === 1 ? "" : "s"}.`

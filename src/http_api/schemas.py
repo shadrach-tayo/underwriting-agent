@@ -159,6 +159,7 @@ class RagHit(BaseModel):
     url: str | None = None
     title: str | None = None
     lender_id: str | None = None
+    page: int | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 
 

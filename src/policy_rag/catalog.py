@@ -75,6 +75,22 @@ def lookup_source(filename: str) -> SourceCatalogEntry | None:
     return _by_file().get(filename) or _by_file().get(Path(filename).name)
 
 
+def resolve_catalog_file(filename: str) -> Path | None:
+    """Return the on-disk policy file if it is catalogued and present."""
+    name = Path(filename).name
+    if lookup_source(name) is None:
+        return None
+    root = CATALOG_PATH.parent.resolve()
+    path = (root / name).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return path
+
+
 def program_for_file(filename: str) -> PolicyLayer | None:
     entry = lookup_source(filename)
     return None if entry is None else entry.program

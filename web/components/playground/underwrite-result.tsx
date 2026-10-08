@@ -4,7 +4,6 @@ import * as React from "react"
 
 import {
   CitationChips,
-  CitationDrawer,
 } from "@/components/playground/citation-drawer"
 import { demoSpotlightClass } from "@/components/playground/demo-tour"
 import { HitlBar } from "@/components/playground/hitl-bar"
@@ -36,6 +35,7 @@ import {
   type UnderwriteResult,
 } from "@/lib/underwrite"
 import { cn } from "@/lib/utils"
+import { useCitationViewerStore } from "@/stores/citation-viewer-store"
 import { useDemoTourStore } from "@/stores/demo-tour-store"
 
 type MetricGaugeProps = {
@@ -340,17 +340,17 @@ export function UnderwriteResultView({
   loading?: boolean
 }) {
   const { catalog } = useGoldSetQuery()
-  const [citationIndex, setCitationIndex] = React.useState<number | null>(null)
+  const openCitations = useCitationViewerStore((s) => s.open)
   const tourCitation = useDemoTourStore((s) => s.citationIndex)
-  const clearTourCitation = useDemoTourStore((s) => s.clearCitation)
   const tourActive = useDemoTourStore((s) => s.active)
   const tourSpotlight = useDemoTourStore(
     (s) => DEMO_STEPS[s.stepIndex]?.spotlight
   )
 
   React.useEffect(() => {
-    if (tourCitation != null) setCitationIndex(tourCitation)
-  }, [tourCitation])
+    if (tourCitation == null || !result?.citations.length) return
+    openCitations(result.citations, tourCitation)
+  }, [openCitations, result, tourCitation])
 
   if (loading && !result) {
     return (
@@ -709,12 +709,12 @@ export function UnderwriteResultView({
               Source clauses
             </p>
             <p className="text-xs text-muted-foreground">
-              Open a clause to read the text behind this recommendation.
+              Open a clause to see it on the source page.
             </p>
           </div>
           <CitationChips
             citations={result.citations}
-            onSelect={setCitationIndex}
+            onSelect={(index) => openCitations(result.citations, index)}
           />
         </section>
       ) : null}
@@ -729,15 +729,6 @@ export function UnderwriteResultView({
           gold={gold}
         />
       </div>
-
-      <CitationDrawer
-        citations={result.citations}
-        openIndex={citationIndex}
-        onOpenChange={(index) => {
-          setCitationIndex(index)
-          if (index == null) clearTourCitation()
-        }}
-      />
     </div>
   )
 }

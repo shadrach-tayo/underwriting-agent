@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from models import Citation, PolicyLayer, PolicySource
 from policy_rag.filters import (
     citation_in_scope,
+    ensure_pdf_citations,
     ensure_regulatory_citations,
     filter_citations,
+    is_pdf_citation,
 )
 
 
@@ -107,3 +109,19 @@ def test_ensure_regulatory_prepends_when_missing() -> None:
     merged = ensure_regulatory_citations([sba], [sba, floor])
     assert merged[0].clause_id == "floor"
     assert merged[1].clause_id == "sba"
+
+
+def test_ensure_pdf_citations_prepends_when_primary_is_docx() -> None:
+    sop = _cite(clause_id="sop.docx:p12", program=PolicyLayer.ELIGIBILITY_GATE)
+    sop.source.name = "SOP 50 10 8.1 effective 10.1.2026_0.docx"
+    pdf = _cite(
+        clause_id="reg.pdf:p3",
+        program=PolicyLayer.COMPLIANCE_FLOOR,
+        authority="regulatory",
+    )
+    pdf.source.name = "12 CFR Part 202 (up to date as of 9-10-2026).pdf"
+    assert not is_pdf_citation(sop)
+    assert is_pdf_citation(pdf)
+    merged = ensure_pdf_citations([sop], [sop, pdf])
+    assert merged[0].source.name.endswith(".pdf")
+    assert merged[1].clause_id == "sop.docx:p12"

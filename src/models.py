@@ -124,6 +124,7 @@ class Citation(BaseModel):
     retrieved_text: str
     similarity_score: float = Field(ge=0, le=1)
     program: PolicyLayer = PolicyLayer.COMPLIANCE_FLOOR
+    page: Optional[int] = Field(default=None, ge=0)
     grounding_score: Optional[float] = Field(default=None, ge=0, le=1)
     grounded: Optional[bool] = None
 
