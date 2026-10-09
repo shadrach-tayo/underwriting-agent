@@ -88,8 +88,8 @@ when the community/ragas pin is compatible.
 
 ## Baseline log
 
-Offline graph-harness results. Citation and faithfulness need `--judge llm` against an ingested corpus.
+Offline graph-harness results on **42 labeled cases** (2 adversarial lender×program mismatches). Citation and faithfulness are not scored here; they need `--judge llm` against an ingested corpus.
 
-| Date | False-approve | Decision acc. | Citation acc. | Program route | Escalation prec. | Notes |
-|------|---------------|---------------|---------------|---------------|------------------|-------|
-| 2026-09-19 | 0.0 | 1.0 | n/a (`--judge skip`) | 1.0 | 1.0 | Graph harness; hard gate + suite pass offline. Re-check citation/faithfulness with `--judge llm` + ingested RAG. |
+| Date | n | False-approve | Decision acc. | Citation acc. | Program route | Escalation prec. | Notes |
+|------|---|---------------|---------------|---------------|---------------|------------------|-------|
+| 2026-09-19 | 42 | 0.0 | 1.0 | n/a (`--judge skip`) | 1.0 | 1.0 | Graph harness; hard gate + suite pass offline. Citation/faithfulness not measured. |

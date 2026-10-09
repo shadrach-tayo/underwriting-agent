@@ -28,7 +28,7 @@ Applicants, policy files, and lender overlays in this repo are synthetic or loca
 
 ## Eval snapshot
 
-Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-gate`), offline, no live retrieval:
+Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-gate`) on **42 labeled cases** (2 adversarial lender×program mismatches). Offline, no live retrieval — these scores are the deterministic envelope (routing, risk ceiling, hard rejects), not RAG quality.
 
 | Metric | Result | Target |
 |--------|--------|--------|
@@ -38,7 +38,7 @@ Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-ga
 | Escalation precision | 1.0 | ≥ 0.8 |
 | Latency p95 | ~215 ms | < 5 s |
 
-Citation and faithfulness need `--judge llm` against an ingested corpus (see [`EVALS.md`](./EVALS.md)). Ops notes: [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
+Citation accuracy and faithfulness are **not in this snapshot**. They need `--judge llm` against an ingested corpus; that is next (see [`EVALS.md`](./EVALS.md)). Ops notes: [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
 
 ## Layout
 
