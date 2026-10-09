@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useGoldSetQuery } from "@/hooks/use-gold-set"
 import { DEMO_STEPS, firstSbaCitationIndex } from "@/lib/demo-tour"
+import { presentCitations } from "@/lib/policy-source"
 import {
   formatCurrency,
   formatLender,
@@ -349,7 +350,8 @@ export function UnderwriteResultView({
 
   React.useEffect(() => {
     if (tourCitation == null || !result?.citations.length) return
-    openCitations(result.citations, firstSbaCitationIndex(result.citations))
+    const { items } = presentCitations(result.citations)
+    openCitations(items, firstSbaCitationIndex(items))
   }, [openCitations, result, tourCitation])
 
   if (loading && !result) {
@@ -714,7 +716,7 @@ export function UnderwriteResultView({
           </div>
           <CitationChips
             citations={result.citations}
-            onSelect={(index) => openCitations(result.citations, index)}
+            onSelect={(citations, index) => openCitations(citations, index)}
           />
         </section>
       ) : null}

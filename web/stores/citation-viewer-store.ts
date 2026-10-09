@@ -2,7 +2,12 @@
 
 import { create } from "zustand"
 
-import { ragHitToCitation } from "@/lib/policy-source"
+import {
+  citationGroupKey,
+  ragHitToCitation,
+  uniqueCitationsBySource,
+  uniqueRagHitsBySource,
+} from "@/lib/policy-source"
 import type { RagHit } from "@/lib/rag"
 import type { Citation } from "@/lib/underwrite"
 
@@ -21,18 +26,32 @@ export const useCitationViewerStore = create<CitationViewerState>((set) => ({
   citations: [],
   openIndex: null,
   previewReady: false,
-  open: (citations, index) =>
+  open: (citations, index) => {
+    const unique = uniqueCitationsBySource(citations)
+    const target = citations[index]
+    const openIndex = target
+      ? unique.findIndex(
+          (citation) => citationGroupKey(citation) === citationGroupKey(target)
+        )
+      : -1
     set({
-      citations,
-      openIndex: citations[index] ? index : null,
+      citations: unique,
+      openIndex: openIndex >= 0 ? openIndex : unique[0] ? 0 : null,
       previewReady: false,
-    }),
-  openHits: (hits, index) =>
+    })
+  },
+  openHits: (hits, index) => {
+    const unique = uniqueRagHitsBySource(hits)
+    const target = hits[index]
+    const openIndex = target
+      ? unique.findIndex((hit) => hit.clause_id === target.clause_id)
+      : -1
     set({
-      citations: hits.map(ragHitToCitation),
-      openIndex: hits[index] ? index : null,
+      citations: unique.map(ragHitToCitation),
+      openIndex: openIndex >= 0 ? openIndex : unique[0] ? 0 : null,
       previewReady: false,
-    }),
+    })
+  },
   setIndex: (index) => set({ openIndex: index, previewReady: false }),
   markReady: () => set({ previewReady: true }),
   close: () => set({ openIndex: null, previewReady: false }),

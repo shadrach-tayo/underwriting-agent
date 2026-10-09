@@ -8,7 +8,7 @@ import {
 } from "@assistant-ui/react"
 
 import { Badge } from "@/components/ui/badge"
-import { canPreviewSource } from "@/lib/policy-source"
+import { canPreviewSource, presentRagHits } from "@/lib/policy-source"
 import type { RagHit } from "@/lib/rag"
 import { useCitationViewerStore } from "@/stores/citation-viewer-store"
 import { useRagSearchStore } from "@/stores/rag-search-store"
@@ -37,13 +37,14 @@ export function SourceChip({
   hit,
   hits,
   index,
+  label,
 }: {
   hit: RagHit
   hits: RagHit[]
   index: number
+  label: string
 }) {
   const openHits = useCitationViewerStore((s) => s.openHits)
-  const title = hit.title || hit.source
   const canOpenPage = canPreviewSource(hit.source)
 
   function openSource() {
@@ -56,7 +57,7 @@ export function SourceChip({
     }
   }
 
-  const label = title || (hit.url ? domainFromUrl(hit.url) : "Source")
+  const text = label || (hit.url ? domainFromUrl(hit.url) : "Source")
 
   return (
     <button
@@ -67,7 +68,7 @@ export function SourceChip({
     >
       <Badge variant="secondary" className="max-w-full font-normal">
         <HugeiconsIcon icon={File02Icon} strokeWidth={2} className="size-3" />
-        <span className="truncate">{label}</span>
+        <span className="truncate">{text}</span>
       </Badge>
     </button>
   )
@@ -116,14 +117,17 @@ export function AssistantSources() {
 
   if (!hasAnswer || hits.length === 0) return null
 
+  const { items, labels } = presentRagHits(hits)
+
   return (
     <div className="flex flex-wrap gap-1.5">
-      {hits.map((hit, index) => (
+      {items.map((hit, index) => (
         <SourceChip
           key={`${hit.clause_id}-${index}`}
           hit={hit}
-          hits={hits}
+          hits={items}
           index={index}
+          label={labels[index] ?? ""}
         />
       ))}
     </div>
@@ -131,9 +135,17 @@ export function AssistantSources() {
 }
 
 export const Sources: SourceMessagePartComponent = (part) => {
-  const hits = useRagSearchStore((s) => s.lastHits)
-  const hitIndex = hits.findIndex((hit) => hit.clause_id === part.id)
-  const hit = hitIndex >= 0 ? hits[hitIndex] : null
+  const lastHits = useRagSearchStore((s) => s.lastHits)
+  const { items, labels } = presentRagHits(lastHits)
+  const hitIndex = items.findIndex((hit) => hit.clause_id === part.id)
+  const hit = hitIndex >= 0 ? items[hitIndex] : null
   if (!hit) return null
-  return <SourceChip hit={hit} hits={hits} index={hitIndex} />
+  return (
+    <SourceChip
+      hit={hit}
+      hits={items}
+      index={hitIndex}
+      label={labels[hitIndex] ?? ""}
+    />
+  )
 }
