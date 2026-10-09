@@ -1,4 +1,4 @@
-"""Eval success criteria — mirrors EVALS.md (Week 4 contract)."""
+"""Eval success criteria — mirrors EVALS.md."""
 
 from __future__ import annotations
 

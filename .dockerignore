@@ -11,6 +11,7 @@ agent-transcripts/
 .env
 .env.*
 !.env.example
+.langgraph_api/
 terraform/
 docs/
 data/gold_set/

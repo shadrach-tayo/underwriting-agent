@@ -4,7 +4,9 @@ Agentic underwriting for SME loans: auto-decide inside a defined confidence and 
 
 ![Walk through Cedar Ridge from apply to officer decision](./docs/demo.gif)
 
-The playground is two seats on one labeled file. An applicant fills `/apply` and watches `/portal`. An officer reviews the same case on `/playground/underwrite`, opens the cited clauses, and records approve / deny / escalate. **Walk through** on the landing page runs that loop on Cedar Ridge Fabrication (`gold-001`). Ask AI is the same Policy RAG path as underwriting, in a sheet.
+The playground is two seats on one labeled file. An applicant fills `/apply` and watches `/portal`. An officer reviews the same case on `/playground/underwrite`, opens the cited clauses, and records approve / deny / escalate. **Walk through** on the landing page runs that loop on Cedar Ridge Fabrication (`gold-001`). Ask AI uses the same Policy RAG path as underwriting, in a sheet.
+
+Applicants, policy files, and lender overlays in this repo are synthetic or local-only. Nothing here moves money or calls a credit bureau.
 
 ## Stack
 
@@ -22,9 +24,11 @@ The playground is two seats on one labeled file. An applicant fills `/apply` and
 | CI | GitHub Actions — pytest + false-approve hard gate |
 | Metrics | `GET /metrics` (JSON) + `GET /prometheus` + Grafana on :3300 |
 
-## Eval snapshot (Week 4)
+`agent` (the shared RAG pipeline) is installed from [`ai-engineering-boilerplate`](https://github.com/shadrach-tayo/ai-engineering-boilerplate) at the `eval` rev, which is MIT-licensed. `uv sync` clones that repo, so it has to stay publicly readable.
 
-Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-gate`):
+## Eval snapshot
+
+Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-gate`), offline, no live retrieval:
 
 | Metric | Result | Target |
 |--------|--------|--------|
@@ -34,7 +38,7 @@ Graph harness (`uv run underwriting-evals --mode graph --judge skip --fail-on-ga
 | Escalation precision | 1.0 | ≥ 0.8 |
 | Latency p95 | ~215 ms | < 5 s |
 
-Citation / faithfulness need `--judge llm` against an ingested corpus (see [`EVALS.md`](./EVALS.md)). Ops notes: [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
+Citation and faithfulness need `--judge llm` against an ingested corpus (see [`EVALS.md`](./EVALS.md)). Ops notes: [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
 
 ## Layout
 
@@ -45,12 +49,12 @@ src/
   mcp_server/     # FastMCP tools
   http_api/       # FastAPI health/ready, underwrite, admin RAG
   policy_rag/     # Policy corpus ingest + RagPipeline adapter (≠ dependency `rag`)
-  evals/          # Eval suite (Week 4)
+  evals/          # Eval suite
   models.py       # Citations, decisions, HITL, audit value objects
   config.py       # Settings incl. hard-coded risk ceiling
 web/              # Next.js demo — apply, portal, officer desk, Ask AI
-data/             # Local only (gitignored) — policy PDFs, gold set, lenders
-docs/             # System design, RUNBOOK, OBSERVABILITY, demo.gif
+data/             # Local only (gitignored) — policy files, gold set, lenders
+docs/             # System design, runbook, observability, demo.gif
 prometheus/       # scrape config (profile: observability)
 grafana/          # provisioned Underwriting API dashboard
 terraform/        # AWS ECS + RDS (configured, not applied — demo is local)
@@ -61,22 +65,19 @@ Dockerfile
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+. Copy [`.env.example`](./.env.example) to `.env` and fill only the keys you need. `.env` is gitignored.
 
 ```bash
-# Install deps into project .venv (created automatically)
 uv sync
 
 # Gold set JSONL is local-only; regenerate if data/gold_set/applicants.jsonl is missing
 uv run underwriting-gold-set
 
-# Copy env template and fill keys (LangSmith + Anthropic for local agent work)
 cp .env.example .env
 
 # Postgres + pgvector for RAG (policy ingest / retrieve)
 docker compose up -d postgres
 
-# Smoke-check
 uv run underwriting-agent
 uv run pytest
 
@@ -94,6 +95,8 @@ uv run underwriting-evals --mode graph --judge skip --fail-on-gate
 cd web && pnpm install && pnpm dev
 ```
 
+Place your own policy files under `data/policy_sources/` before ingest. They are not in git. See [`data/README.md`](./data/README.md).
+
 ### API container
 
 ```bash
@@ -107,7 +110,8 @@ docker run --rm -p 8080:8080 --env-file .env \
 # data/gold_set so the playground /gold-set catalog can load it):
 docker compose --profile api up -d --build api
 
-# Prometheus :9090 + Grafana :3300 (scrapes GET /prometheus)
+# Prometheus :9090 + Grafana :3300 (scrapes GET /prometheus).
+# Local login is admin / admin. Do not publish ports 3300, 54326, or 8080.
 docker compose --profile observability up -d
 
 # Run api and observability stack
@@ -146,6 +150,4 @@ Terraform under [`terraform/`](./terraform/) describes ECS Fargate + RDS Postgre
 
 ## License
 
-**All Rights Reserved** — see [`LICENSE`](./LICENSE). Viewing for portfolio review is fine; reuse requires written permission.
-
-An unused PolyForm Noncommercial draft remains at [`licenses/LICENSE.polyform-noncommercial`](./licenses/LICENSE.polyform-noncommercial) if you ever want to switch.
+[MIT](./LICENSE). Copyright (c) 2026 Shadrach Oloyede.

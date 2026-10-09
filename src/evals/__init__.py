@@ -1,4 +1,4 @@
-"""Eval suite package (Week 4 metrics + Week 1 gold-set helpers)."""
+"""Eval suite package (metrics + gold-set helpers)."""
 
 from evals.gold_set import (
     GOLD_SET_PATH,

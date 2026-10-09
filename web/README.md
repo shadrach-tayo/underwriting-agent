@@ -2,7 +2,7 @@
 
 Demo of agentic underwriting for any kind of lending: auto-decide inside the envelope, escalate the rest with a cited trace, and keep a hard-coded risk ceiling.
 
-Preset: shadcn `b3avGgdsgM` (Next, RTL-capable components, pointer cursors). Default UI direction is **LTR** (`lang=en`) for the English underwriting product; `components.json` keeps `"rtl": true` so added components stay RTL-ready.
+shadcn/ui on Next.js. Default UI direction is **LTR** (`lang=en`); `components.json` keeps `"rtl": true` so added components stay RTL-ready.
 
 ## Setup
 

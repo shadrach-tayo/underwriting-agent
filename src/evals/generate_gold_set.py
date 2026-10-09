@@ -1,4 +1,4 @@
-"""Generate the Week 1 gold set from Fed SBCS calibration priors + policy layers.
+"""Generate the gold set from Fed SBCS calibration priors + policy layers.
 
 Calibration priors are drawn from the Fed 2025 Small Business Credit Survey
 employer-firm / Firms in Focus framing in ``data/calibration policy/``:

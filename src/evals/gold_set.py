@@ -17,7 +17,7 @@ ExpectedProgram = Literal["sba_7a", "cdfi_direct"]
 
 
 class GoldLabel(BaseModel):
-    """Rule-based ground truth for evals (Week 1 Day 4 / Week 4 metrics)."""
+    """Rule-based ground truth for evals."""
 
     outcome: DecisionOutcome
     compliance_floor_pass: bool = True

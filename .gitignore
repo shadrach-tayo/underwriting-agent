@@ -25,6 +25,9 @@ htmlcov/
 .vscode/
 .DS_Store
 
+# Local LangGraph dev server state
+.langgraph_api/
+
 # Local corpus — policy PDFs, gold set, lender overlays (not published)
 /data/*
 !/data/README.md

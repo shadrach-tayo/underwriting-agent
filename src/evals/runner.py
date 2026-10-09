@@ -109,7 +109,7 @@ def run_suite(
     limit: int | None = None,
     case_ids: Sequence[str] | None = None,
 ) -> SuiteReport:
-    """Run the full Week 4 metric suite over the gold set."""
+    """Run the full metric suite over the gold set."""
     init_tracing()
     cases = load_gold_cases(gold_path or GOLD_SET_PATH)
     if case_ids:

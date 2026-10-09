@@ -1,4 +1,4 @@
-"""In-process underwrite metrics for Week 4 Day 5 observability."""
+"""In-process underwrite metrics."""
 
 from __future__ import annotations
 

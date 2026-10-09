@@ -65,7 +65,7 @@ API Gateway (Backend API | MCP | Serverless)
 | Failure | Mitigation |
 |---------|------------|
 | Missed edge cases | Critic retry loop (`Send`) + HITL |
-| Hallucination | Citation grounding fields + RAG (Week 3) |
+| Hallucination | Citation grounding fields + policy RAG |
 | API / LLM outage | SDK retries the provider call; on failure fail closed to escalate (no stacked app/node loops). Quota/auth never retry. |
 | Over-conservative declines | Calibrate composite score + term-mod suggestions |
 | Ceiling override abuse | Maker-checker (`override_confirmed_by`) |

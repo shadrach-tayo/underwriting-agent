@@ -1,6 +1,6 @@
 # Problem Statement
 
-> Week 1 Day 1 deliverable. Fill this before writing production agent logic.
+Decision problem this agent is built to support.
 
 ## Who is the user, and what decision are they making?
 

@@ -9,7 +9,7 @@ def get_applicant_financials(applicant_id: str) -> dict[str, Any]:
 
 
 def fetch_policy_clause(query: str) -> dict[str, Any]:
-    """Fetch a policy clause by query. Stub until pgvector ingestion (Week 3)."""
+    """Fetch a policy clause by query. Stub; live retrieval is the policy RAG path."""
     return {"query": query, "clause": None, "status": "stub"}
 
 
@@ -24,7 +24,7 @@ def escalate_case(applicant_id: str, reason: str) -> dict[str, Any]:
 
 
 def create_mcp_server():
-    """Build the FastMCP server (Week 2 Day 5)."""
+    """Build the FastMCP server."""
     from fastmcp import FastMCP
 
     mcp = FastMCP("underwriting-agent")

@@ -15,7 +15,7 @@ from evals.types import JudgeMode
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="underwriting-evals",
-        description="Week 4 eval suite (DeepEval metrics + Braintrust dataset/evals).",
+        description="Eval suite (DeepEval metrics + Braintrust dataset/evals).",
     )
     p.add_argument(
         "--mode",

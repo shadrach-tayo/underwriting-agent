@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Agentic SME underwriting decision & escalation system with a hard-coded risk ceiling"
 readme = "README.md"
 authors = [
-    { name = "Shadrach Oloyede", email = "" }
+    { name = "Shadrach Oloyede" }
 ]
 requires-python = ">=3.12"
 dependencies = [
