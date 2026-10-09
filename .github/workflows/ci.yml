@@ -54,13 +54,15 @@ jobs:
           LANGCHAIN_TRACING_V2: "false"
         run: uv run underwriting-evals --mode oracle --judge skip --fail-on-gate
       - name: Graph eval hard gate
-        # Hard gate = false-approve rate == 0 (EVALS.md). Citation accuracy is
-        # tracked in EVALS.md / README but needs Voyage+pgvector, so CI does not
-        # fail the suite on citation when RAG is offline.
+        # Hard gate = false-approve rate == 0 (EVALS.md). CI has no Postgres;
+        # predict_graph stubs citations on DatabaseUnavailableError so eligible
+        # gold cases still complete. Citation accuracy needs Voyage+pgvector
+        # and is not a CI fail.
         env:
           BRAINTRUST_TRACING: "false"
           LANGSMITH_TRACING: "false"
           LANGCHAIN_TRACING_V2: "false"
+          UNDERWRITING_EVAL_OFFLINE_RAG: "1"
         run: >
           uv run underwriting-evals
           --mode graph

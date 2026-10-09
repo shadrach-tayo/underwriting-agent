@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from evals.gold_set import load_gold_cases
-from evals.harness import predict_oracle
+from evals.harness import (
+    _graph_eval_retrieve,
+    _offline_eval_citations,
+    predict_graph,
+    predict_oracle,
+)
 from evals.metrics.decision import is_false_approve
 from evals.runner import run_suite, score_case
 from evals.types import Prediction, decision_from_gold_label
 from models import DecisionOutcome, RiskTier
+from retries import DatabaseUnavailableError
 
 
 def test_oracle_suite_passes_hard_gate() -> None:
@@ -43,3 +53,55 @@ def test_oracle_prediction_has_retrieval_contexts() -> None:
     scored = score_case(case, pred, judge_mode="heuristic")
     assert scored.faithfulness is not None
     assert scored.citation_accuracy is not None
+
+
+def test_graph_eval_retrieve_stubs_when_postgres_is_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("UNDERWRITING_EVAL_OFFLINE_RAG", raising=False)
+    case = load_gold_cases()[0]
+
+    def boom(_applicant: object) -> list:
+        raise DatabaseUnavailableError()
+
+    cites, offline = _graph_eval_retrieve(case.applicant, boom)
+    assert offline is True
+    assert cites[0].clause_id == _offline_eval_citations()[0].clause_id
+
+
+def test_graph_eval_retrieve_skips_live_rag_in_ci(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CI", "true")
+    called = {"n": 0}
+
+    def boom(_applicant: object) -> list:
+        called["n"] += 1
+        raise DatabaseUnavailableError()
+
+    cites, offline = _graph_eval_retrieve(load_gold_cases()[0].applicant, boom)
+    assert called["n"] == 0
+    assert offline is True
+    assert cites[0].clause_id == "eval-offline:eligibility"
+
+
+def test_predict_graph_survives_database_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.setenv("UNDERWRITING_EVAL_OFFLINE_RAG", "1")
+    case = next(
+        c
+        for c in load_gold_cases()
+        if not c.applicant.has_bankruptcy and not c.applicant.has_severe_fraud_alert
+    )
+
+    def boom(_applicant: object) -> list:
+        raise DatabaseUnavailableError()
+
+    with patch("agents.policy._retrieve_citations_once", side_effect=boom):
+        pred = predict_graph(case)
+    assert pred.decision.outcome is not None
+    assert pred.metadata["harness"] == "graph"
+    assert pred.metadata["rag_offline"] is True

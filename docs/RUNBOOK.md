@@ -1,4 +1,4 @@
-# Runbook — Week 4 operations
+# Runbook
 
 Short operational notes for the FastAPI + LangGraph underwriting service.
 
@@ -37,7 +37,8 @@ Short operational notes for the FastAPI + LangGraph underwriting service.
 
 1. **HARD GATE FAILED: false_approve_rate > 0** — treat as a release blocker. Inspect the failing `case_id` in the uploaded `eval-report.json` artifact; never relax the gate.
 2. Unit tests fail — fix before merging; graph smoke tests do not need live Voyage/Postgres.
-3. Citation / faithfulness below target with `--judge heuristic` is expected when RAG is offline; re-check with `--judge llm` against an ingested corpus before calling Milestone 4 “quality complete.” CI gates **false-approve** only (citation needs live retrieval keys).
+3. Citation / faithfulness below target with `--judge heuristic` is expected when RAG is offline; re-check with `--judge llm` against an ingested corpus. CI gates **false-approve** only (citation needs live retrieval keys).
+4. Graph eval in CI has no Postgres. The harness stubs policy citations (`UNDERWRITING_EVAL_OFFLINE_RAG=1` / `CI=true`) so the false-approve gate still runs (`rag_offline: true` in the report). Live `/underwrite` still returns **503** when the DB is down on an otherwise-eligible file.
 
 ## Useful curls
 

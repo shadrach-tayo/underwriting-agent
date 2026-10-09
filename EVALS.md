@@ -1,6 +1,6 @@
 # Eval Success Criteria
 
-> Week 1 Day 5 deliverable. **Week 4 implementation lives in `src/evals/`.**
+Targets and how to run them. Implementation lives in `src/evals/`.
 
 ## Hard gate
 
@@ -10,7 +10,7 @@
 
 ## Target thresholds
 
-| Metric | Target | Tool (Week 4) |
+| Metric | Target | Tool |
 |--------|--------|----------------|
 | Decision accuracy | 90%+ | DeepEval custom (`DecisionAccuracyMetric`) |
 | Escalation precision | 80%+ | Exact match among predicted escalations |
@@ -46,7 +46,8 @@ uv run underwriting-evals --mode oracle
 uv run underwriting-evals --sync-dry-run    # preview record plan
 uv run underwriting-evals --sync-dataset    # upsert + flush
 
-# Against the live LangGraph agent
+# Against the live LangGraph agent (CI stubs RAG if Postgres is down;
+# live /underwrite still 503s on eligible+DB-down)
 uv run underwriting-evals --mode graph --fail-on-gate
 
 # LLM judges for citation + RAG metrics (needs ANTHROPIC/OPENAI keys)
@@ -87,7 +88,7 @@ when the community/ragas pin is compatible.
 
 ## Baseline log
 
-Record first full eval pass numbers here after Week 4 Day 1.
+Offline graph-harness results. Citation and faithfulness need `--judge llm` against an ingested corpus.
 
 | Date | False-approve | Decision acc. | Citation acc. | Program route | Escalation prec. | Notes |
 |------|---------------|---------------|---------------|---------------|------------------|-------|
